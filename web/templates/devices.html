@@ -1,0 +1,365 @@
+{{define "devices.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "devices" "Hints" .Hints "CSRF" .CSRF "Back" "/devices"}}
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Routers</h2>
+    <form method="get" action="/devices" class="inline-search">
+      <input name="q" value="{{.Data.Q}}" placeholder="search" aria-label="Search devices">
+      <button class="ghost" type="submit">Search</button>
+    </form>
+  </header>
+  {{if .Data.Devices}}
+  <table class="grid">
+    <thead>
+      <tr><th>Name</th><th>State</th><th>Last sync</th><th>Last report</th>
+        <th class="num">Holds</th><th class="num">Lag</th><th>Roles</th><th>RouterOS</th><th>Tokens</th></tr>
+    </thead>
+    <tbody>
+      {{range .Data.Devices}}
+      {{$h := .Health $.Now}}
+      <tr>
+        <td>
+          <a href="/devices/{{.ID}}"><strong>{{.Name}}</strong></a>
+          {{if .Identity}}<div class="dim">{{.Identity}}{{if .LastIP}} · {{.LastIP}}{{end}}</div>{{end}}
+        </td>
+        <td><span class="dot {{$h}}"></span>{{$h}}</td>
+        <td class="dim" title="{{stamp .LastSyncAt}}">{{age .LastSyncAt $.Now}}</td>
+        <td class="dim" title="{{stamp .LastReportAt}}">{{age .LastReportAt $.Now}}</td>
+        <td class="num">{{comma .Applied}}</td>
+        <td class="num">{{comma (subi $.Data.Cursor .Cursor)}}</td>
+        <td class="dim">
+          {{if .Contribute}}<span class="tag">reports</span>{{end}}
+          {{if .Consume}}<span class="tag">receives</span>{{end}}
+          {{if .IPv6}}<span class="tag">IPv6</span>{{end}}
+        </td>
+        <td class="dim">{{if .ROSVersion}}{{.ROSVersion}}{{else}}{{.ROSBranch}}{{end}}</td>
+        <td class="num">{{.TokenCount}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty">No routers registered yet. Add one below, then generate its script bundle.</p>
+  {{end}}
+</section>
+
+{{if .Admin.CanWrite}}
+<section class="panel">
+  <header class="panel-head"><h2>Register a router</h2></header>
+  <form method="post" action="/devices" class="stack">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="row">
+      <div class="field grow">
+        <label for="name">Name</label>
+        <input id="name" name="name" placeholder="edge-warsaw" required>
+        <p class="fine">Used in the console and the audit log. The router's own identity is picked up automatically.</p>
+      </div>
+      <div class="field">
+        <label for="ros_branch">RouterOS</label>
+        <select id="ros_branch" name="ros_branch">
+          <option value="v7">7.x</option>
+          <option value="v6">6.49.x</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sync_interval">Sync every <span class="opt">seconds</span></label>
+        <input id="sync_interval" name="sync_interval" type="number" min="5" max="3600" value="{{.Data.Defaults.Sync}}">
+      </div>
+      <div class="field">
+        <label for="report_interval">Report every <span class="opt">seconds</span></label>
+        <input id="report_interval" name="report_interval" type="number" min="30" max="86400" value="{{.Data.Defaults.Report}}">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="list_name">Blocklist name</label>
+        <input id="list_name" name="list_name" value="{{.Data.Defaults.List}}">
+      </div>
+      <div class="field">
+        <label for="detect_list">Detection list</label>
+        <input id="detect_list" name="detect_list" value="{{.Data.Defaults.Detect}}">
+      </div>
+      <div class="field">
+        <label for="block_timeout">Entry timeout</label>
+        <input id="block_timeout" name="block_timeout" value="{{.Data.Defaults.Timeout}}">
+        <p class="fine">Keeps entries in RAM, never on flash.</p>
+      </div>
+      <div class="field grow">
+        <label for="tags">Tags <span class="opt">optional</span></label>
+        <input id="tags" name="tags" placeholder="site-a, production">
+      </div>
+      <div class="field check">
+        <label><input type="checkbox" name="ipv6" value="1"> Handle IPv6 too</label>
+      </div>
+      <div class="field actions"><button class="btn primary" type="submit">Add router</button></div>
+    </div>
+  </form>
+</section>
+{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "device.html"}}{{template "head" .}}
+{{$d := .Data.D}}
+{{template "hintcard" dict "Key" "device" "Hints" .Hints "CSRF" .CSRF "Back" (print "/devices/" $d.ID)}}
+<div class="crumbs"><a href="/devices">Devices</a> <span>/</span> <span>{{$d.Name}}</span></div>
+
+<div class="stats">
+  <div class="stat">
+    {{$h := $d.Health .Now}}
+    <span class="n"><span class="dot {{$h}}"></span>{{$h}}</span>
+    <span class="k">state</span>
+    <span class="f">last sync {{age $d.LastSyncAt .Now}}</span>
+  </div>
+  <div class="stat">
+    <span class="n">{{comma $d.Applied}}</span>
+    <span class="k">addresses held</span>
+    <span class="f">as the router last reported</span>
+  </div>
+  <div class="stat">
+    <span class="n">{{comma .Data.Lag}}</span>
+    <span class="k">cursor lag</span>
+    <span class="f">router {{comma $d.Cursor}} of {{comma .Data.Cursor}}</span>
+  </div>
+  <div class="stat">
+    <span class="n">{{comma $d.ReportsTotal}}</span>
+    <span class="k">reports sent</span>
+    <span class="f">last {{age $d.LastReportAt .Now}}</span>
+  </div>
+  <div class="stat">
+    <span class="n">{{if $d.LastBootAt}}{{age $d.LastBootAt .Now}}{{else}}—{{end}}</span>
+    <span class="k">last full rebuild</span>
+    <span class="f">after a reboot or a resync</span>
+  </div>
+</div>
+
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head">
+      <h2>Settings</h2>
+      <a class="btn" href="/devices/{{$d.ID}}/scripts">Generate scripts</a>
+    </header>
+    <form method="post" action="/devices/{{$d.ID}}" class="stack">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <div class="row">
+        <div class="field grow"><label for="name">Name</label>
+          <input id="name" name="name" value="{{$d.Name}}" required></div>
+        <div class="field"><label for="ros_branch">RouterOS</label>
+          <select id="ros_branch" name="ros_branch">
+            <option value="v7" {{if eq $d.ROSBranch "v7"}}selected{{end}}>7.x</option>
+            <option value="v6" {{if eq $d.ROSBranch "v6"}}selected{{end}}>6.49.x</option>
+          </select></div>
+        <div class="field check"><label><input type="checkbox" name="enabled" value="1" {{if $d.Enabled}}checked{{end}}> Enabled</label>
+          <p class="fine">Disabling refuses this router's token immediately.</p></div>
+      </div>
+      <div class="field"><label for="description">Description</label>
+        <input id="description" name="description" value="{{$d.Description}}"></div>
+      <div class="row">
+        <div class="field"><label for="list_name">Blocklist name</label>
+          <input id="list_name" name="list_name" value="{{$d.ListName}}"></div>
+        <div class="field"><label for="detect_list">Detection list</label>
+          <input id="detect_list" name="detect_list" value="{{$d.DetectList}}"></div>
+        <div class="field"><label for="block_timeout">Entry timeout</label>
+          <input id="block_timeout" name="block_timeout" value="{{$d.BlockTimeout}}"></div>
+        <div class="field"><label for="verify_cert">TLS certificate</label>
+          <select id="verify_cert" name="verify_cert">
+            <option value="yes-without-crl" {{if eq $d.VerifyCert "yes-without-crl"}}selected{{end}}>Verify (no CRL)</option>
+            <option value="yes" {{if eq $d.VerifyCert "yes"}}selected{{end}}>Verify fully</option>
+            <option value="no" {{if eq $d.VerifyCert "no"}}selected{{end}}>Do not verify</option>
+          </select></div>
+      </div>
+      {{if eq $d.VerifyCert "no"}}
+      <div class="flash warn">This router does not verify the server certificate, so its token could be
+        captured by anyone able to intercept the connection. RouterOS 7 can verify out of the box;
+        RouterOS 6 needs the issuing CA imported under <span class="mono">/certificate</span> first.</div>
+      {{end}}
+      <div class="row">
+        <div class="field"><label for="sync_interval">Sync every <span class="opt">seconds</span></label>
+          <input id="sync_interval" name="sync_interval" type="number" min="5" max="3600" value="{{$d.SyncInterval}}">
+          <p class="fine">How quickly a block reaches this router.</p></div>
+        <div class="field"><label for="report_interval">Report every <span class="opt">seconds</span></label>
+          <input id="report_interval" name="report_interval" type="number" min="30" max="86400" value="{{$d.ReportInterval}}"></div>
+        <div class="field check">
+          <label><input type="checkbox" name="contribute" value="1" {{if $d.Contribute}}checked{{end}}> Contributes detections</label>
+          <label><input type="checkbox" name="consume" value="1" {{if $d.Consume}}checked{{end}}> Receives the blocklist</label>
+          <label><input type="checkbox" name="ipv6" value="1" {{if $d.IPv6}}checked{{end}}> Handles IPv6</label>
+        </div>
+        <div class="field grow"><label for="tags">Tags</label>
+          <input id="tags" name="tags" value="{{$d.Tags}}"></div>
+      </div>
+      <div class="field"><label for="notes">Notes</label>
+        <textarea id="notes" name="notes" rows="2">{{$d.Notes}}</textarea></div>
+      {{if .Admin.CanWrite}}
+      <div class="row">
+        <div class="field actions"><button class="btn primary" type="submit">Save</button></div>
+      </div>
+      {{end}}
+    </form>
+    <p class="fine">Changing the interval, the list names or the timeout takes effect on the router's
+      next run. The scripts ask the server for their configuration; only this server's address and the
+      token are baked into the generated files.</p>
+  </section>
+
+  <section class="panel side">
+    <header class="panel-head"><h2>Reported by this router</h2></header>
+    <div class="chart small">
+      <svg viewBox="0 0 100 30" preserveAspectRatio="none" role="img" aria-label="Reports per hour">
+        <path class="spark" d="{{sparkline .Data.Series "reports"}}"></path>
+      </svg>
+    </div>
+    {{if .Data.Recent}}
+    <ul class="feed">
+      {{range .Data.Recent}}
+      <li><a class="mono" href="/addresses/{{.AddressID}}">{{.IP}}</a>
+        {{if .Fresh}}<span class="tag new">new</span>{{end}}
+        <span class="dim">{{age .At $.Now}}</span></li>
+      {{end}}
+    </ul>
+    <p class="fine"><a href="/activity?device={{$d.ID}}">Full activity for this router</a></p>
+    {{else}}
+    <p class="empty">Nothing reported yet.</p>
+    {{end}}
+  </section>
+</div>
+
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head"><h2>Tokens</h2></header>
+    {{if .Data.Tokens}}
+    <table class="grid">
+      <thead><tr><th>Prefix</th><th>Label</th><th>Issued</th><th>By</th><th>Last used</th><th class="num">Calls</th><th>State</th><th></th></tr></thead>
+      <tbody>
+        {{range .Data.Tokens}}
+        <tr>
+          <td class="mono">{{.Prefix}}…</td>
+          <td>{{.Label}}</td>
+          <td class="dim" title="{{stamp .CreatedAt}}">{{age .CreatedAt $.Now}}</td>
+          <td class="dim">{{.CreatedBy}}</td>
+          <td class="dim">{{age .LastUsedAt $.Now}}</td>
+          <td class="num">{{comma .UseCount}}</td>
+          <td>{{if .Active $.Now}}<span class="tag on">active</span>{{else}}<span class="tag off">revoked</span>{{end}}</td>
+          <td class="right">
+            {{if and ($.Admin.CanWrite) (.Active $.Now)}}
+            <form method="post" action="/devices/{{$d.ID}}/tokens/{{.ID}}/revoke" class="inline">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}">
+              <button class="ghost danger" type="submit"
+                data-confirm="Revoke {{.Prefix}}…? A router still using it stops synchronising immediately.">Revoke</button>
+            </form>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No tokens yet. Generating a script bundle issues one automatically.</p>
+    {{end}}
+    {{if .Admin.CanWrite}}
+    <form method="post" action="/devices/{{$d.ID}}/tokens" class="row">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <div class="field grow"><label for="label">Label</label>
+        <input id="label" name="label" placeholder="replacement for the 2026 rollover"></div>
+      <div class="field"><label for="days">Expires after <span class="opt">days</span></label>
+        <input id="days" name="days" type="number" min="0" max="3650" placeholder="never"></div>
+      <div class="field actions"><button class="btn" type="submit">Issue a token</button></div>
+    </form>
+    <p class="fine">Issuing does not revoke anything, so a router can be rolled over without an outage:
+      install the new token, confirm the router is syncing, then revoke the old one.</p>
+    {{end}}
+  </section>
+
+  {{if .Admin.CanWrite}}
+  <section class="panel side danger-zone">
+    <header class="panel-head"><h2>Remove</h2></header>
+    <p class="fine">Deleting a router revokes its tokens and drops its attribution. The addresses it
+      reported stay on the blocklist, but they lose it as a corroborating source.</p>
+    <form method="post" action="/devices/{{$d.ID}}/delete">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="btn danger" type="submit"
+        data-confirm="Delete {{$d.Name}}? Its tokens stop working immediately.">Delete this router</button>
+    </form>
+  </section>
+  {{end}}
+</div>
+{{template "foot" .}}{{end}}
+
+
+{{define "scripts.html"}}{{template "head" .}}
+{{$d := .Data.D}}
+{{template "hintcard" dict "Key" "scripts" "Hints" .Hints "CSRF" .CSRF "Back" (print "/devices/" $d.ID "/scripts")}}
+<div class="crumbs"><a href="/devices">Devices</a> <span>/</span>
+  <a href="/devices/{{$d.ID}}">{{$d.Name}}</a> <span>/</span> <span>Scripts</span></div>
+
+{{if .Data.Error}}
+<div class="flash err">{{.Data.Error}}</div>
+<p><a class="btn" href="/devices/{{$d.ID}}">Fix the device settings</a></p>
+{{else}}
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Download the bundle</h2>
+    <span class="dim">endpoint <span class="mono">{{.Data.BaseURL}}/api/v1</span></span>
+  </header>
+  {{if .Admin.CanWrite}}
+  <form method="post" action="/devices/{{$d.ID}}/scripts" class="row grouped">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field">
+      <label for="days">Token expires after <span class="opt">days</span></label>
+      <input id="days" name="days" type="number" min="0" max="3650" placeholder="never">
+    </div>
+    <div class="field actions wrap">
+      <button class="btn primary" name="part" value="install"
+        data-confirm="This issues a new token and embeds it in the downloaded file. Continue?">apb-install.rsc</button>
+      <button class="btn" name="part" value="scripts"
+        data-confirm="This issues a new token and embeds it in the downloaded file. Continue?">scripts only</button>
+      <button class="btn" name="part" value="scheduler">scheduler only</button>
+      <button class="btn" name="part" value="firewall">firewall example</button>
+      <button class="btn" name="part" value="uninstall">uninstall</button>
+    </div>
+  </form>
+  <p class="fine">
+    <strong>apb-install.rsc</strong> is what you want in almost every case: it installs the four
+    scripts and the three schedules, then builds the list immediately. It contains a freshly issued
+    token, so download it only when you intend to install it.
+  </p>
+  {{else}}
+  <p class="empty">Your account is read-only. The preview below shows what would be generated.</p>
+  {{end}}
+</section>
+
+<section class="panel">
+  <header class="panel-head"><h2>Install it</h2></header>
+  <ol class="steps wide">
+    <li>Download <span class="mono">apb-install.rsc</span> above.</li>
+    <li>Upload it to the router: drag it into Files in WinBox, or
+      <span class="mono">scp apb-install.rsc admin@router:/</span></li>
+    <li>Run <span class="mono">/import file-name=apb-install.rsc</span></li>
+    <li>Delete the file from the router. It contains the token.</li>
+    <li>Check <span class="mono">/log print where message~"APB"</span> — you should see a rebuild
+      complete within a few seconds, and this page will show the router as online.</li>
+    <li>Add enforcement rules. The generated firewall example drops traffic from
+      <span class="mono">{{$d.ListName}}</span>; review it before importing, because rule order matters.</li>
+  </ol>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Preview</h2>
+    <span class="dim">token shown as <span class="mono">{{.Data.Placeholder}}</span></span>
+  </header>
+  <details open>
+    <summary>apb-install.rsc — scripts, schedules and a first run</summary>
+    <pre class="code">{{.Data.Bundle.Install}}</pre>
+  </details>
+  <details>
+    <summary>apb-firewall-example.rsc — detection and enforcement rules</summary>
+    <pre class="code">{{.Data.Bundle.Firewall}}</pre>
+  </details>
+  <details>
+    <summary>apb-uninstall.rsc — remove everything APB installed</summary>
+    <pre class="code">{{.Data.Bundle.Uninstall}}</pre>
+  </details>
+</section>
+{{end}}
+{{template "foot" .}}{{end}}

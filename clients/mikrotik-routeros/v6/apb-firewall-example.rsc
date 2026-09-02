@@ -1,0 +1,36 @@
+# APB example detection and enforcement rules for edge-1.
+#
+# READ THIS BEFORE IMPORTING. These rules are a starting point, not a drop-in
+# configuration. They append to the end of your existing chains, and firewall
+# rules are evaluated in order, so you almost certainly need to move them.
+# Import on a lab router first, or paste the individual lines you want.
+#
+# What they do:
+#   * the four staged rules catch repeated new SSH connections and, on the
+#     fourth attempt within three minutes, put the source into "APB_detect"
+#   * probes of the management ports and a TCP port scan land there directly
+#   * the two drop rules enforce the list "APB" that APB maintains
+#
+# APB uploads whatever lands in "APB_detect" on its next report run, so
+# anything you add to that list by any other means is contributed too.
+
+/ip firewall filter
+
+# --- staged SSH brute force detection (most specific stage first) -----------
+add action=add-src-to-address-list address-list=APB_detect address-list-timeout=1d chain=input comment="APB: SSH brute force, 4th attempt" connection-state=new dst-port=22 protocol=tcp src-address-list=apb-ssh-3
+add action=add-src-to-address-list address-list=apb-ssh-3 address-list-timeout=3m chain=input comment="APB: SSH stage 3" connection-state=new dst-port=22 protocol=tcp src-address-list=apb-ssh-2
+add action=add-src-to-address-list address-list=apb-ssh-2 address-list-timeout=1m chain=input comment="APB: SSH stage 2" connection-state=new dst-port=22 protocol=tcp src-address-list=apb-ssh-1
+add action=add-src-to-address-list address-list=apb-ssh-1 address-list-timeout=1m chain=input comment="APB: SSH stage 1" connection-state=new dst-port=22 protocol=tcp
+
+# --- unsolicited probes of management services -----------------------------
+add action=add-src-to-address-list address-list=APB_detect address-list-timeout=1d chain=input comment="APB: management port probe" connection-state=new dst-port=21,23,8291,8728,8729 protocol=tcp
+
+# --- port scan detector ----------------------------------------------------
+add action=add-src-to-address-list address-list=APB_detect address-list-timeout=1d chain=input comment="APB: TCP port scan" protocol=tcp psd=21,3s,3,1
+
+# --- enforcement: drop everything the shared blocklist names ---------------
+# Move these to the top of their chains, above your accept rules, or they will
+# never be reached.
+add action=drop chain=input comment="APB: drop blocked sources" src-address-list=APB
+add action=drop chain=forward comment="APB: drop blocked sources" src-address-list=APB
+

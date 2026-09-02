@@ -1,0 +1,78 @@
+# APB — one service, one volume.
+#
+#   cp .env.example .env      and edit it
+#   docker compose up -d
+#   docker compose logs apb   to read the one-time setup code
+#
+# The container listens on 8080. This file assumes a Traefik reverse proxy in
+# front of it for TLS; if you terminate TLS some other way, uncomment the
+# ports block and drop the labels.
+
+services:
+  apb:
+    build:
+      context: .
+      args:
+        VERSION: ${APB_VERSION:-2.0.0}
+    image: apb:${APB_VERSION:-2.0.0}
+    container_name: apb
+    restart: unless-stopped
+
+    env_file: .env
+    environment:
+      APB_ADDR: ":8080"
+      APB_DATA_DIR: /data
+      # Only set this to true when a proxy you control sets the header. With it
+      # on and no proxy, any client can forge its own address and defeat the
+      # rate limits.
+      APB_TRUST_PROXY: "true"
+
+    volumes:
+      - apb-data:/data
+
+    # The service needs nothing but its own volume.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Comfortable for tens of routers and a blocklist in the hundreds of
+    # thousands. Raise if you run very large lists.
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    # Uncomment to expose the service directly instead of through Traefik.
+    # Bind to localhost unless something else terminates TLS.
+    # ports:
+    #   - "127.0.0.1:8080:8080"
+
+    labels:
+      traefik.enable: "true"
+      traefik.http.services.apb.loadbalancer.server.port: "8080"
+
+      traefik.http.routers.apb-http.rule: Host(`${APB_HOST:-apb.example.org}`)
+      traefik.http.routers.apb-http.entrypoints: web
+      traefik.http.routers.apb-http.middlewares: apb-https
+
+      traefik.http.routers.apb.rule: Host(`${APB_HOST:-apb.example.org}`)
+      traefik.http.routers.apb.entrypoints: websecure
+      traefik.http.routers.apb.tls.certresolver: ${APB_CERT_RESOLVER:-leresolver}
+      traefik.http.routers.apb.service: apb
+
+      traefik.http.middlewares.apb-https.redirectscheme.scheme: https
+      traefik.http.middlewares.apb-https.redirectscheme.permanent: "true"
+
+volumes:
+  apb-data:

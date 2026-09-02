@@ -1,0 +1,169 @@
+{{define "settings.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "settings" "Hints" .Hints "CSRF" .CSRF "Back" "/settings"}}
+{{$v := .Data.Values}}
+
+<form method="post" action="/settings">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+
+<section class="panel">
+  <header class="panel-head"><h2>Identity</h2></header>
+  <div class="row">
+    <div class="field grow">
+      <label for="instance_name">Instance name</label>
+      <input id="instance_name" name="instance_name" value="{{index $v "instance_name"}}">
+      <p class="fine">Shown in the header, in the two-factor enrolment entry and in generated scripts.</p>
+    </div>
+    <div class="field grow">
+      <label>Public address routers call</label>
+      <input value="{{.Data.BaseURL}}" readonly>
+      <p class="fine">Set with the <span class="mono">APB_BASE_URL</span> environment variable. It is
+        baked into every generated script, so changing it means regenerating them.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>When an address gets blocked</h2>
+    <span class="dim">the two settings that matter most</span>
+  </header>
+  <div class="row">
+    <div class="field">
+      <label for="auto_block_reports">Reports before broadcast</label>
+      <input id="auto_block_reports" name="auto_block_reports" type="number" min="1" max="1000" value="{{index $v "auto_block_reports"}}">
+      <p class="fine">1 pushes an address the moment any router reports it.</p>
+    </div>
+    <div class="field">
+      <label for="auto_block_devices">Distinct routers before broadcast</label>
+      <input id="auto_block_devices" name="auto_block_devices" type="number" min="1" max="1000" value="{{index $v "auto_block_devices"}}">
+      <p class="fine">Raising this to 2 requires a second site to agree before anything is blocked.
+        Slower, and far less likely to block something by mistake.</p>
+    </div>
+    <div class="field">
+      <label for="default_ttl_days">Block lifetime <span class="opt">days</span></label>
+      <input id="default_ttl_days" name="default_ttl_days" type="number" min="0" max="3650" value="{{index $v "default_ttl_days"}}">
+      <p class="fine">An address not seen again for this long is released everywhere. 0 keeps it forever.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head"><h2>Defaults for new routers</h2></header>
+  <div class="row">
+    <div class="field"><label for="default_list_name">Blocklist name</label>
+      <input id="default_list_name" name="default_list_name" value="{{index $v "default_list_name"}}"></div>
+    <div class="field"><label for="default_detect_list">Detection list</label>
+      <input id="default_detect_list" name="default_detect_list" value="{{index $v "default_detect_list"}}"></div>
+    <div class="field"><label for="default_block_timeout">Entry timeout</label>
+      <input id="default_block_timeout" name="default_block_timeout" value="{{index $v "default_block_timeout"}}">
+      <p class="fine">RouterOS keeps entries with a timeout in RAM and never writes them to flash.
+        520w is about ten years and still displays correctly.</p></div>
+    <div class="field"><label for="default_sync_interval">Sync interval <span class="opt">s</span></label>
+      <input id="default_sync_interval" name="default_sync_interval" type="number" min="5" max="3600" value="{{index $v "default_sync_interval"}}"></div>
+    <div class="field"><label for="default_report_interval">Report interval <span class="opt">s</span></label>
+      <input id="default_report_interval" name="default_report_interval" type="number" min="30" max="86400" value="{{index $v "default_report_interval"}}"></div>
+  </div>
+  <p class="fine">These apply to routers added from now on. Existing routers keep their own values,
+    which you can change on each device page without regenerating anything.</p>
+</section>
+
+<section class="panel">
+  <header class="panel-head"><h2>Protocol limits</h2></header>
+  <div class="row">
+    <div class="field"><label for="max_sync_bytes">Max sync payload <span class="opt">bytes</span></label>
+      <input id="max_sync_bytes" name="max_sync_bytes" type="number" min="512" max="16384" value="{{index $v "max_sync_bytes"}}">
+      <p class="fine">RouterOS truncates a fetch response well before 64 KB. 8192 is comfortable;
+        raising it risks silent truncation on the router.</p></div>
+    <div class="field"><label for="max_report_size">Max report upload <span class="opt">bytes</span></label>
+      <input id="max_report_size" name="max_report_size" type="number" min="1024" max="8388608" value="{{index $v "max_report_size"}}"></div>
+    <div class="field grow"><label for="require_user_agent">Required client User-Agent</label>
+      <input id="require_user_agent" name="require_user_agent" value="{{index $v "require_user_agent"}}" placeholder="leave empty to disable">
+      <p class="fine">Defence in depth only. It filters out background internet noise before the token
+        is even checked; it is not a substitute for the token, and it must match the value in the
+        generated scripts, so changing it means regenerating them.</p></div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head"><h2>Retention</h2></header>
+  <div class="row">
+    <div class="field"><label for="change_retention_days">Replication log <span class="opt">days</span></label>
+      <input id="change_retention_days" name="change_retention_days" type="number" min="1" max="3650" value="{{index $v "change_retention_days"}}">
+      <p class="fine">A router offline longer than this rebuilds its whole list instead of catching up.</p></div>
+    <div class="field"><label for="event_retention_days">Activity stream <span class="opt">days</span></label>
+      <input id="event_retention_days" name="event_retention_days" type="number" min="1" max="3650" value="{{index $v "event_retention_days"}}"></div>
+    <div class="field"><label for="audit_retention_days">Audit log <span class="opt">days</span></label>
+      <input id="audit_retention_days" name="audit_retention_days" type="number" min="1" max="3650" value="{{index $v "audit_retention_days"}}"></div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head"><h2>Console sessions</h2></header>
+  <div class="row">
+    <div class="field"><label for="session_idle_minutes">Idle timeout <span class="opt">min</span></label>
+      <input id="session_idle_minutes" name="session_idle_minutes" type="number" min="5" max="1440" value="{{index $v "session_idle_minutes"}}"></div>
+    <div class="field"><label for="session_max_hours">Session lifetime <span class="opt">h</span></label>
+      <input id="session_max_hours" name="session_max_hours" type="number" min="1" max="720" value="{{index $v "session_max_hours"}}"></div>
+    <div class="field"><label for="login_max_attempts">Failed logins before lockout</label>
+      <input id="login_max_attempts" name="login_max_attempts" type="number" min="3" max="100" value="{{index $v "login_max_attempts"}}"></div>
+    <div class="field"><label for="login_lock_minutes">Lockout <span class="opt">min</span></label>
+      <input id="login_lock_minutes" name="login_lock_minutes" type="number" min="1" max="1440" value="{{index $v "login_lock_minutes"}}"></div>
+  </div>
+</section>
+
+<section class="panel">
+  <header class="panel-head"><h2>Geolocation</h2></header>
+  <div class="row">
+    <div class="field check">
+      <label><input type="checkbox" name="geo_enabled" value="1" {{if eq (index $v "geo_enabled") "1"}}checked{{end}}> Resolve country and network</label>
+      <label><input type="checkbox" name="geo_auto_update" value="1" {{if eq (index $v "geo_auto_update") "1"}}checked{{end}}> Refresh the databases weekly</label>
+      <p class="fine">Lookups are local. No address APB handles is ever sent to a third party.</p>
+    </div>
+    <div class="field grow"><label for="geo_country_url">Country database URL</label>
+      <input id="geo_country_url" name="geo_country_url" value="{{index $v "geo_country_url"}}"></div>
+    <div class="field grow"><label for="geo_asn_url">ASN database URL</label>
+      <input id="geo_asn_url" name="geo_asn_url" value="{{index $v "geo_asn_url"}}"></div>
+  </div>
+</section>
+
+{{if .Admin.CanWrite}}
+<div class="sticky-save">
+  <button class="btn primary" type="submit">Save settings</button>
+  <span class="dim">Changes take effect immediately and reach the routers on their next poll.</span>
+</div>
+{{end}}
+</form>
+
+{{if .Admin.CanWrite}}
+<section class="panel">
+  <header class="panel-head"><h2>Geolocation databases</h2></header>
+  <dl class="facts">
+    <dt>Country file</dt><dd>{{if .Data.Geo.CountryPresent}}{{bytes .Data.Geo.CountrySize}}, built {{.Data.Geo.CountryBuilt.UTC.Format "2006-01-02"}}{{else}}<span class="dim">not installed</span>{{end}}</dd>
+    <dt>ASN file</dt><dd>{{if .Data.Geo.ASNPresent}}{{bytes .Data.Geo.ASNSize}}, built {{.Data.Geo.ASNBuilt.UTC.Format "2006-01-02"}}{{else}}<span class="dim">not installed</span>{{end}}</dd>
+    <dt>Directory</dt><dd class="mono">{{.Data.Geo.Dir}}</dd>
+  </dl>
+  <form method="post" action="/settings/geo" class="row">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field actions wrap">
+      <button class="btn" name="op" value="download">Download now</button>
+      <button class="btn" name="op" value="reload">Reload from disk</button>
+      <button class="btn" name="op" value="reresolve"
+        data-confirm="Locate every address again? This runs in the background and can take a while on a large list.">Re-locate every address</button>
+    </div>
+  </form>
+  <p class="fine">The default sources are open-licensed country and ASN databases in MaxMind format
+    that need no account or key. You can point these at any MMDB file, including a paid one. A
+    download is validated before it replaces a working database.</p>
+</section>
+{{end}}
+
+<section class="panel">
+  <header class="panel-head"><h2>Service</h2></header>
+  <dl class="facts">
+    <dt>Version</dt><dd>APB {{.Version}}</dd>
+    <dt>Database</dt><dd class="mono">{{.Data.DBPath}} · {{bytes .Data.DBBytes}}</dd>
+    <dt>Integrity check</dt><dd>{{if eq .Data.Integrity "ok"}}<span class="tag on">ok</span>{{else}}<span class="tag off">{{.Data.Integrity}}</span>{{end}}</dd>
+    <dt>Replication cursor</dt><dd>{{comma .Data.Cursor}}{{if .Data.CursorFloor}} <span class="dim">(history pruned below {{comma .Data.CursorFloor}})</span>{{end}}</dd>
+  </dl>
+</section>
+{{template "foot" .}}{{end}}

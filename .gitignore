@@ -1,0 +1,43 @@
+# --- runtime state (never committed) ---
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# --- secrets & deployment-specific ---
+.env
+.env.*
+!.env.example
+*.override.yml
+docker-compose.override.yml
+.htpasswd
+*.pem
+*.key
+*.crt
+secret.key
+/secrets/
+
+# --- geo databases (large, license-bound, fetched at runtime) ---
+*.mmdb
+/geo/
+
+# --- build output ---
+# Anchored to the repository root on purpose: an unanchored "apbd" would also
+# match the cmd/apbd source directory and quietly drop it from the repository.
+/bin/
+/dist/
+/apbd
+/apbctl
+/apbd.exe
+/apbctl.exe
+*.test
+coverage.out
+
+# --- editor / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

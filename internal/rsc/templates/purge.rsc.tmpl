@@ -1,0 +1,16 @@
+# APB purge for {{.DeviceName}}.
+# Clears every address APB manages on this router and forgets the cursor, so
+# the next sync rebuilds from scratch. The scripts and schedules stay in place.
+:local List "{{.ListName}}"
+:local Sent "{{.SentList}}"
+:global apbCursor
+:global apbLock
+:global apbBootLock
+:global apbReportLock
+{{template "flush" .}}
+/ip firewall address-list remove [find list=$Sent]
+:set apbCursor
+:set apbLock
+:set apbBootLock
+:set apbReportLock
+:log info "APB: local state cleared"

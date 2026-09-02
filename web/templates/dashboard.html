@@ -1,0 +1,185 @@
+{{define "dashboard.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "dashboard" "Hints" .Hints "CSRF" .CSRF "Back" "/"}}
+
+{{$d := .Data.D}}
+<div class="stats">
+  <a class="stat big" href="/addresses">
+    <span class="n">{{comma $d.Blocked}}</span>
+    <span class="k">blocked now</span>
+    <span class="f">enforced on every router</span>
+  </a>
+  <a class="stat" href="/addresses?sort=first">
+    <span class="n up">+{{comma $d.AddedDay}}</span>
+    <span class="k">added, 24h</span>
+    <span class="f">{{comma $d.AddedWeek}} in 7 days</span>
+  </a>
+  <a class="stat" href="/addresses?state=released">
+    <span class="n down">−{{comma $d.RemovedDay}}</span>
+    <span class="k">removed, 24h</span>
+    <span class="f">released, expired or whitelisted</span>
+  </a>
+  <a class="stat" href="/addresses?peers=2">
+    <span class="n">{{comma $d.MultiDevice}}</span>
+    <span class="k">seen by 2+ routers</span>
+    <span class="f">{{pct $d.MultiDevice $d.Blocked}} of the list</span>
+  </a>
+  <a class="stat" href="/activity">
+    <span class="n">{{comma $d.ReportsDay}}</span>
+    <span class="k">reports, 24h</span>
+    <span class="f">across {{comma $d.Devices}} router(s)</span>
+  </a>
+  <a class="stat" href="/devices">
+    <span class="n">{{$d.DevicesOnline}}<span class="of">/{{$d.Devices}}</span></span>
+    <span class="k">routers online</span>
+    <span class="f">
+      {{if $d.DevicesLagging}}<em class="warn">{{$d.DevicesLagging}} lagging</em>{{end}}
+      {{if $d.DevicesOffline}}<em class="bad">{{$d.DevicesOffline}} offline</em>{{end}}
+      {{if and (not $d.DevicesLagging) (not $d.DevicesOffline)}}all reporting{{end}}
+    </span>
+  </a>
+</div>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Blocklist activity</h2>
+    <nav class="tabs">
+      <a href="{{qs .Query "hours" 24}}"  {{if eq .Data.Hours 24}}class="on"{{end}}>24h</a>
+      <a href="{{qs .Query "hours" 48}}"  {{if eq .Data.Hours 48}}class="on"{{end}}>48h</a>
+      <a href="{{qs .Query "hours" 168}}" {{if eq .Data.Hours 168}}class="on"{{end}}>7d</a>
+      <a href="{{qs .Query "hours" 720}}" {{if eq .Data.Hours 720}}class="on"{{end}}>30d</a>
+    </nav>
+  </header>
+  <div class="chart">
+    <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img"
+         aria-label="Addresses added and removed per hour">
+      <line class="axis" x1="0" y1="28.5" x2="100" y2="28.5"></line>
+      {{range bars $d.Series}}
+        <rect class="bar-add" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}">
+          <title>{{.Label}} — {{.Value}} added, {{.Removed}} removed</title>
+        </rect>
+        {{if .RH}}<rect class="bar-rem" x="{{.X}}" y="{{.RY}}" width="{{.W}}" height="{{.RH}}"></rect>{{end}}
+      {{end}}
+    </svg>
+    <p class="legend">
+      <span class="key add"></span> added
+      <span class="key rem"></span> removed
+      <span class="spacer"></span>
+      cursor {{comma $d.Cursor}} · database {{bytes $d.DBBytes}}
+    </p>
+  </div>
+</section>
+
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head">
+      <h2>Where the traffic comes from</h2>
+      {{if not .Data.GeoReady}}<span class="tag warn">no geolocation database</span>{{end}}
+    </header>
+    {{if .Data.GeoReady}}
+    <div class="mapbox">
+      <svg viewBox="0 0 1000 500" class="worldmap" role="img" aria-label="Blocked addresses by country">
+        <g>
+        {{range .Data.Map}}<path class="cc l{{.Level}}" d="{{.D}}">{{if .Name}}<title>{{.Name}}{{if .Count}} — {{comma .Count}} blocked{{end}}</title>{{end}}</path>
+        {{end}}
+        </g>
+      </svg>
+      <p class="legend maplegend">
+        fewer <span class="key l1"></span><span class="key l2"></span><span class="key l3"></span><span class="key l4"></span><span class="key l5"></span> more
+      </p>
+    </div>
+    {{else}}
+    <p class="empty">Install a geolocation database under <a href="/settings">Settings</a> to see
+      countries and network operators. Blocking works without it.</p>
+    {{end}}
+  </section>
+
+  <section class="panel side">
+    <header class="panel-head"><h2>Top countries</h2></header>
+    {{if $d.TopCountries}}
+    <ul class="ranked">
+      {{range $d.TopCountries}}
+      <li>
+        <a href="/addresses?cc={{.Code}}">
+          <span class="flag" aria-hidden="true">{{flag .Code}}</span>
+          <span class="label">{{if .Name}}{{.Name}}{{else}}{{.Code}}{{end}}</span>
+          <span class="count">{{comma .Count}}</span>
+        </a>
+        <span class="meter"><i class="{{pctclass .Count (index $d.TopCountries 0).Count}}"></i></span>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="empty">Nothing located yet.</p>{{end}}
+  </section>
+</div>
+
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head">
+      <h2>Most reported addresses</h2>
+      <a class="ghost" href="/addresses?sort=peers">See all</a>
+    </header>
+    {{if $d.TopAddresses}}
+    <table class="grid">
+      <thead><tr><th>Address</th><th>Country</th><th class="num">Routers</th><th class="num">Reports</th><th>First seen</th></tr></thead>
+      <tbody>
+      {{range $d.TopAddresses}}
+        <tr>
+          <td><a class="mono" href="/addresses/{{.ID}}">{{.IP}}</a></td>
+          <td>{{if .Country}}<span title="{{if .CountryName}}{{.CountryName}}{{else}}{{.Country}}{{end}}">{{.Country}}</span>{{else}}<span class="dim">—</span>{{end}}</td>
+          <td class="num"><strong>{{.DeviceCount}}</strong></td>
+          <td class="num">{{comma .ReportCount}}</td>
+          <td class="dim">{{age .FirstSeen $.Now}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<p class="empty">No addresses reported yet. Provision a router under <a href="/devices">Devices</a>.</p>{{end}}
+  </section>
+
+  <section class="panel side">
+    <header class="panel-head"><h2>Top networks</h2></header>
+    {{if $d.TopASNs}}
+    <ul class="ranked">
+      {{range $d.TopASNs}}
+      <li>
+        <a href="/addresses?asn={{.ASN}}">
+          <span class="label" title="{{.Org}}">{{if .Org}}{{trunc 28 .Org}}{{else}}AS{{.ASN}}{{end}}</span>
+          <span class="count">{{comma .Count}}</span>
+        </a>
+        <span class="meter"><i class="{{pctclass .Count (index $d.TopASNs 0).Count}}"></i></span>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="empty">Nothing located yet.</p>{{end}}
+  </section>
+</div>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Routers</h2>
+    <a class="ghost" href="/devices">Manage</a>
+  </header>
+  {{if $d.RecentDevices}}
+  <table class="grid">
+    <thead><tr><th>Name</th><th>State</th><th>Last sync</th><th>Last report</th>
+      <th class="num">Holds</th><th class="num">Cursor lag</th><th>RouterOS</th></tr></thead>
+    <tbody>
+    {{range $d.RecentDevices}}
+      {{$h := .Health $.Now}}
+      <tr>
+        <td><a href="/devices/{{.ID}}">{{.Name}}</a>{{if .Identity}}<span class="dim"> · {{.Identity}}</span>{{end}}</td>
+        <td><span class="dot {{$h}}"></span>{{$h}}</td>
+        <td class="dim">{{age .LastSyncAt $.Now}}</td>
+        <td class="dim">{{age .LastReportAt $.Now}}</td>
+        <td class="num">{{comma .Applied}}</td>
+        <td class="num">{{comma (subi $d.Cursor .Cursor)}}</td>
+        <td class="dim">{{if .ROSVersion}}{{.ROSVersion}}{{else}}{{.ROSBranch}}{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty">No routers yet. <a href="/devices">Add your first one</a> — it takes about a minute.</p>
+  {{end}}
+</section>
+{{template "foot" .}}{{end}}

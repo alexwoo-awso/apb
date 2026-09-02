@@ -1,0 +1,63 @@
+# APB full rebuild for {{.DeviceName}}.
+# The blocklist lives in RAM, so it is empty after a reboot. This script pulls
+# the whole list back in pages small enough for the fetch buffer and stores the
+# server cursor so the incremental sync can take over.
+# It also runs when the server reports that the cursor is too old to catch up.
+:local Url "{{.BaseURL}}/api/v1"
+:local Token "{{.Token}}"
+:local List "{{.ListName}}"
+:local UA "{{.UserAgent}}"
+:local Timeout {{.BlockTimeout}}
+:local MaxPages {{.MaxPages}}
+:global apbCursor
+:global apbBootLock
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Now [/system resource get uptime]
+:local Run true
+:if ([:typeof $apbBootLock] = "time") do={ :if (($Now - $apbBootLock) < 30m) do={ :set Run false } }
+:if ($Run) do={
+:set apbBootLock $Now
+:do {
+:local Next 0
+:local Page 0
+:local NewCursor -1
+:local Total 0
+:local Failed false
+:local Started false
+:do {
+:set Page ($Page + 1)
+:local U ($Url . "/full")
+:if ($Next > 0) do={ :set U ($U . "?a=" . $Next) }
+:set Next 0
+:local Res ""
+:do { :set Res [/tool fetch url=$U http-method=get http-header-field=$Hdr check-certificate={{.VerifyCert}} output=user as-value] } on-error={ :set Failed true }
+:if (!$Failed) do={
+:if ([:typeof $Res] = "array") do={
+:if (($Res->"status") = "finished") do={
+:if (!$Started) do={
+:set Started true
+:set apbCursor
+{{template "flush" .}}
+}
+:foreach Tok in=[:toarray ($Res->"data")] do={
+:if ([:len $Tok] > 1) do={
+:local K [:pick $Tok 0 1]
+:local V [:pick $Tok 1 [:len $Tok]]
+:if ($K = "+") do={ {{template "bulkadd" .}} }
+:if ($K = "c") do={ :set NewCursor [:tonum $V] }
+:if ($K = "n") do={ :set Next [:tonum $V] }
+}
+}
+} else={ :set Failed true }
+} else={ :set Failed true }
+}
+} while=((!$Failed) && ($Next > 0) && ($Page < $MaxPages))
+:if ($Failed) do={
+:log error "APB: rebuild failed, the sync script will retry"
+} else={
+:if ($NewCursor >= 0) do={ :set apbCursor $NewCursor }
+:log info ("APB: rebuild complete, " . $Total . " addresses, cursor " . $NewCursor)
+}
+} on-error={ :log error "APB: rebuild script aborted" }
+:set apbBootLock
+}

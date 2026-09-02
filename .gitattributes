@@ -1,0 +1,12 @@
+# Normalise to LF in the repository. The Makefile, the Dockerfile and the shell
+# and Python helpers are executed on Linux inside the container, where a CRLF
+# line ending is a syntax error rather than a cosmetic difference.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.mmdb binary
+
+# RouterOS reads its own line endings, and these are reference copies rather
+# than files anyone edits.
+*.rsc text eol=lf

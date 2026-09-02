@@ -1,0 +1,12 @@
+.git
+.gitignore
+data
+docs
+test
+*.md
+!README.md
+.env
+.env.*
+*.mmdb
+bin
+dist

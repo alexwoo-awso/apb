@@ -1,0 +1,297 @@
+{{define "activity.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "activity" "Hints" .Hints "CSRF" .CSRF "Back" "/activity"}}
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Reports</h2>
+    <form method="get" action="/activity" class="inline-search">
+      <label class="sr" for="device">Router</label>
+      <select id="device" name="device">
+        <option value="0">All routers</option>
+        {{range .Data.Devices}}
+        <option value="{{.ID}}" {{if eq .ID $.Data.DeviceID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+      <button class="ghost" type="submit">Filter</button>
+    </form>
+  </header>
+  {{if .Data.Rows}}
+  <table class="grid">
+    <thead><tr><th>When</th><th>Router</th><th>Address</th><th></th></tr></thead>
+    <tbody>
+      {{range .Data.Rows}}
+      <tr>
+        <td class="dim" title="{{stamp .At}}">{{stamp .At}}</td>
+        <td><a href="/devices/{{.DeviceID}}">{{.DeviceName}}</a></td>
+        <td><a class="mono" href="/addresses/{{.AddressID}}">{{.IP}}</a></td>
+        <td>{{if .Fresh}}<span class="tag new">first sighting</span>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  <nav class="pager">
+    {{if gt .Data.Page 1}}<a href="{{qs .Query "page" (sub .Data.Page 1)}}">Previous</a>{{end}}
+    <span>Page {{.Data.Page}}</span>
+    <a href="{{qs .Query "page" (add .Data.Page 1)}}">Next</a>
+  </nav>
+  {{else}}
+  <p class="empty">Nothing reported yet. A newly installed router shows up here within its report
+    interval, which defaults to five minutes.</p>
+  {{end}}
+</section>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Replication log</h2>
+    <span class="dim">what the routers are being told, newest first</span>
+  </header>
+  {{if .Data.Changes}}
+  <table class="grid compact">
+    <thead><tr><th class="num">Seq</th><th>Operation</th><th>Address</th><th>When</th></tr></thead>
+    <tbody>
+      {{range .Data.Changes}}
+      <tr>
+        <td class="num dim">{{.Seq}}</td>
+        <td>{{if eq .Op "A"}}<span class="tag on">block</span>{{else}}<span class="tag off">unblock</span>{{end}}</td>
+        <td class="mono">{{.IP}}</td>
+        <td class="dim" title="{{stamp .At}}">{{age .At $.Now}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}<p class="empty">The replication log is empty.</p>{{end}}
+</section>
+{{template "foot" .}}{{end}}
+
+
+{{define "audit.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "audit" "Hints" .Hints "CSRF" .CSRF "Back" "/audit"}}
+<section class="panel">
+  <header class="panel-head">
+    <h2>{{comma .Data.Total}} entries</h2>
+    <form method="get" action="/audit" class="inline-search">
+      <input name="q" value="{{.Data.Q}}" placeholder="account, action, address" aria-label="Search the audit log">
+      <button class="ghost" type="submit">Search</button>
+    </form>
+  </header>
+  {{if .Data.Rows}}
+  <table class="grid">
+    <thead><tr><th>When</th><th>Account</th><th>Action</th><th>Target</th><th>Detail</th><th>From</th><th></th></tr></thead>
+    <tbody>
+      {{range .Data.Rows}}
+      <tr class="{{if not .OK}}row-bad{{end}}">
+        <td class="dim">{{stamp .At}}</td>
+        <td>{{.Actor}}<span class="dim"> · {{.ActorType}}</span></td>
+        <td class="mono">{{.Action}}</td>
+        <td>{{.Target}}</td>
+        <td class="dim">{{trunc 80 .Detail}}</td>
+        <td class="dim mono">{{.IP}}</td>
+        <td>{{if not .OK}}<span class="tag off">failed</span>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "pager" dict "Page" .Data.Page "Pages" .Data.Pages "Query" .Query}}
+  {{else}}<p class="empty">Nothing logged yet.</p>{{end}}
+</section>
+{{template "foot" .}}{{end}}
+
+
+{{define "users.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "users" "Hints" .Hints "CSRF" .CSRF "Back" "/users"}}
+
+<section class="panel">
+  <header class="panel-head"><h2>Accounts</h2></header>
+  <table class="grid">
+    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Two-factor</th><th>Last sign in</th><th>State</th><th></th></tr></thead>
+    <tbody>
+      {{range .Data.Admins}}
+      <tr>
+        <td><strong>{{.Username}}</strong>{{if eq .ID $.Admin.ID}} <span class="tag">you</span>{{end}}</td>
+        <td>{{.DisplayName}}{{if .Email}}<div class="dim">{{.Email}}</div>{{end}}</td>
+        <td><span class="tag role-{{.Role}}">{{.Role}}</span></td>
+        <td>{{if .TOTPEnrolled}}<span class="tag on">enrolled</span>{{else}}<span class="tag warn">not yet</span>{{end}}</td>
+        <td class="dim" title="{{stamp .LastLoginAt}}">{{age .LastLoginAt $.Now}}{{if .LastLoginIP}}<div class="mono">{{.LastLoginIP}}</div>{{end}}</td>
+        <td>
+          {{if .Disabled}}<span class="tag off">disabled</span>
+          {{else if gt .LockedUntil $.Now}}<span class="tag warn">locked</span>
+          {{else}}<span class="tag on">active</span>{{end}}
+          {{if .FailedAttempts}}<div class="dim">{{.FailedAttempts}} failed</div>{{end}}
+        </td>
+        <td class="right nowrap">
+          {{if $.Admin.CanWrite}}
+          {{if gt .LockedUntil $.Now}}
+          <form method="post" action="/users/{{.ID}}/unlock" class="inline">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost" type="submit">Unlock</button>
+          </form>
+          {{end}}
+          <form method="post" action="/users/{{.ID}}/reset2fa" class="inline">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <button class="ghost" type="submit"
+              data-confirm="Clear the second factor for {{.Username}}? They will enrol a new authenticator at their next sign in.">Reset 2FA</button>
+          </form>
+          <form method="post" action="/users/{{.ID}}/sessions" class="inline">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <button class="ghost" type="submit" data-confirm="Sign {{.Username}} out of every session?">Sign out</button>
+          </form>
+          {{if ne .ID $.Admin.ID}}
+          <form method="post" action="/users/{{.ID}}/delete" class="inline">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <button class="ghost danger" type="submit"
+              data-confirm="Delete the account {{.Username}}? This cannot be undone.">Delete</button>
+          </form>
+          {{end}}
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+{{if .Admin.CanWrite}}
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head"><h2>Add an account</h2></header>
+    <form method="post" action="/users" class="stack" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <div class="row">
+        <div class="field"><label for="username">Username</label>
+          <input id="username" name="username" required></div>
+        <div class="field grow"><label for="display_name">Display name</label>
+          <input id="display_name" name="display_name"></div>
+        <div class="field grow"><label for="email">Email</label>
+          <input id="email" name="email" type="email"></div>
+        <div class="field"><label for="role">Role</label>
+          <select id="role" name="role">
+            <option value="viewer">Viewer — read only</option>
+            <option value="admin" selected>Administrator</option>
+            {{if .Admin.IsOwner}}<option value="owner">Owner</option>{{end}}
+          </select></div>
+      </div>
+      <div class="row">
+        <div class="field grow"><label for="password">Initial password</label>
+          <input id="password" name="password" type="password" minlength="{{.Data.MinLen}}" required autocomplete="new-password">
+          <p class="fine">At least {{.Data.MinLen}} characters. They must change it and enrol an
+            authenticator before they can use the console.</p></div>
+        <div class="field actions"><button class="btn primary" type="submit">Create</button></div>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel side">
+    <header class="panel-head"><h2>Change a role</h2></header>
+    {{range .Data.Admins}}
+    <form method="post" action="/users/{{.ID}}" class="rowline">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}">
+      <input type="hidden" name="display_name" value="{{.DisplayName}}">
+      <input type="hidden" name="email" value="{{.Email}}">
+      <span class="who">{{.Username}}</span>
+      <select name="role" aria-label="Role for {{.Username}}">
+        <option value="viewer" {{if eq .Role "viewer"}}selected{{end}}>viewer</option>
+        <option value="admin"  {{if eq .Role "admin"}}selected{{end}}>admin</option>
+        <option value="owner"  {{if eq .Role "owner"}}selected{{end}}>owner</option>
+      </select>
+      <label class="check"><input type="checkbox" name="disabled" value="1" {{if .Disabled}}checked{{end}}> disabled</label>
+      <button class="ghost" type="submit">Save</button>
+    </form>
+    {{end}}
+    <p class="fine">Changing a role or disabling an account signs it out everywhere immediately.</p>
+  </section>
+</div>
+{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "account.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "account" "Hints" .Hints "CSRF" .CSRF "Back" "/account"}}
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head"><h2>{{.Admin.Username}}</h2></header>
+    <dl class="facts">
+      <dt>Role</dt><dd>{{.Admin.Role}}</dd>
+      <dt>Display name</dt><dd>{{if .Admin.DisplayName}}{{.Admin.DisplayName}}{{else}}<span class="dim">not set</span>{{end}}</dd>
+      <dt>Email</dt><dd>{{if .Admin.Email}}{{.Admin.Email}}{{else}}<span class="dim">not set</span>{{end}}</dd>
+      <dt>Two-factor</dt><dd>{{if .Admin.TOTPEnrolled}}<span class="tag on">enrolled</span>{{else}}<span class="tag warn">not enrolled</span>{{end}}</dd>
+      <dt>Last sign in</dt><dd>{{stamp .Admin.LastLoginAt}} <span class="dim">from {{.Admin.LastLoginIP}}</span></dd>
+      <dt>Created</dt><dd>{{stamp .Admin.CreatedAt}}</dd>
+    </dl>
+  </section>
+
+  <section class="panel side">
+    <header class="panel-head"><h2>Change your password</h2></header>
+    <form method="post" action="/account/password" class="stack" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label for="current">Current password</label>
+      <input id="current" name="current" type="password" autocomplete="current-password" required>
+      <label for="password">New password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="{{.Data.MinLen}}" required>
+      <label for="password2">Repeat new password</label>
+      <input id="password2" name="password2" type="password" autocomplete="new-password" required>
+      <button class="btn primary" type="submit">Change password</button>
+      <p class="fine">This signs you out everywhere, including here.</p>
+    </form>
+  </section>
+</div>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Active sessions</h2>
+    <form method="post" action="/users/{{.Admin.ID}}/sessions" class="inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="ghost danger" type="submit" data-confirm="Sign out of every session, including this one?">Sign out everywhere</button>
+    </form>
+  </header>
+  <table class="grid">
+    <thead><tr><th>Started</th><th>Last used</th><th>Expires</th><th>From</th><th>Browser</th><th></th></tr></thead>
+    <tbody>
+      {{range .Data.Sessions}}
+      <tr>
+        <td class="dim">{{stamp .CreatedAt}}</td>
+        <td class="dim">{{age .LastSeenAt $.Now}}</td>
+        <td class="dim">{{stamp .ExpiresAt}}</td>
+        <td class="mono">{{.IP}}</td>
+        <td class="dim">{{trunc 60 .UserAgent}}</td>
+        <td>{{if eq (printf "%s" .ID) $.Data.Current}}<span class="tag on">this one</span>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{template "foot" .}}{{end}}
+
+
+{{define "help.html"}}{{template "head" .}}
+<section class="panel">
+  <header class="panel-head">
+    <h1>Help</h1>
+    <form method="post" action="/hints/reset" class="inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="ghost" type="submit">Show every explainer card again</button>
+    </form>
+  </header>
+  <p class="lead">Each section of the console explains itself the first time you open it. Those
+    explanations are collected here.</p>
+</section>
+{{range .Data.Hints}}
+<section class="panel help-entry">
+  <h2>{{.Title}}</h2>
+  {{.Body}}
+  {{if .Steps}}<ol class="hint-steps">{{range .Steps}}<li>{{.}}</li>{{end}}</ol>{{end}}
+</section>
+{{end}}
+<section class="panel">
+  <h2>How a block travels</h2>
+  <ol class="steps wide">
+    <li>Your firewall rules put an abusive source into the router's detection list.</li>
+    <li>The router uploads it on its report schedule, by default every five minutes.</li>
+    <li>APB records who saw it and when. Once the corroboration threshold under Settings is met, the
+      address is appended to the replication log.</li>
+    <li>Every router polls that log on its sync schedule, by default every fifteen seconds, and adds
+      the address to its blocklist with a long timeout so it stays in RAM.</li>
+    <li>Releasing or whitelisting appends a removal instead, which travels the same way.</li>
+    <li>After a reboot the router has an empty list and no cursor, so it rebuilds from a paged full
+      download and then resumes incremental sync.</li>
+  </ol>
+</section>
+{{template "foot" .}}{{end}}

@@ -1,0 +1,342 @@
+{{define "addresses.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "addresses" "Hints" .Hints "CSRF" .CSRF "Back" "/addresses"}}
+{{$f := .Data.Filter}}
+
+<form class="filters" method="get" action="/addresses">
+  <div class="field grow">
+    <label for="q">Search</label>
+    <input id="q" name="q" value="{{$f.Query}}" placeholder="address, 203.0.113.0/24, country, network operator">
+  </div>
+  <div class="field">
+    <label for="state">State</label>
+    <select id="state" name="state">
+      <option value="blocked"  {{if eq $f.State "blocked"}}selected{{end}}>Blocked</option>
+      <option value="released" {{if eq $f.State "released"}}selected{{end}}>Released</option>
+      <option value="all"      {{if eq $f.State ""}}selected{{end}}>Both</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="peers">Min. routers</label>
+    <input id="peers" name="peers" type="number" min="0" max="1000" value="{{if $f.MinPeers}}{{$f.MinPeers}}{{end}}" placeholder="any">
+  </div>
+  <div class="field">
+    <label for="family">Family</label>
+    <select id="family" name="family">
+      <option value="">Any</option>
+      <option value="4" {{if eq $f.Family 4}}selected{{end}}>IPv4</option>
+      <option value="6" {{if eq $f.Family 6}}selected{{end}}>IPv6</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="sort">Sort</label>
+    <select id="sort" name="sort">
+      <option value="recent"  {{if eq $f.Sort "recent"}}selected{{end}}>Last seen</option>
+      <option value="first"   {{if eq $f.Sort "first"}}selected{{end}}>Newest</option>
+      <option value="oldest"  {{if eq $f.Sort "oldest"}}selected{{end}}>Oldest</option>
+      <option value="peers"   {{if eq $f.Sort "peers"}}selected{{end}}>Routers</option>
+      <option value="reports" {{if eq $f.Sort "reports"}}selected{{end}}>Reports</option>
+      <option value="ip"      {{if eq $f.Sort "ip"}}selected{{end}}>Address</option>
+      <option value="country" {{if eq $f.Sort "country"}}selected{{end}}>Country</option>
+    </select>
+  </div>
+  <div class="field actions">
+    <button class="btn" type="submit">Apply</button>
+    <a class="ghost" href="/addresses">Reset</a>
+  </div>
+</form>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>{{comma .Data.Total}} matching {{if eq $f.State "blocked"}}blocked{{else if eq $f.State "released"}}released{{end}} address{{if ne .Data.Total 1}}es{{end}}</h2>
+    <div class="head-actions">
+      <a class="ghost" href="/addresses/export{{qs .Query "format" "csv"}}">Export CSV</a>
+      <a class="ghost" href="/addresses/export{{qs .Query "format" "txt"}}">Export list</a>
+    </div>
+  </header>
+
+  {{if .Data.Rows}}
+  <form method="post" action="/addresses/action" data-bulk>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="back" value="/addresses{{if .Query}}?{{.Query}}{{end}}">
+
+    <div class="bulkbar" data-bulkbar hidden>
+      <span data-bulkcount>0 selected</span>
+      <label class="scope">
+        <input type="checkbox" name="scope" value="filter">
+        apply to all {{comma .Data.Total}} matching rows
+      </label>
+      <span class="spacer"></span>
+      {{if .Admin.CanWrite}}
+      <button class="btn" name="action" value="release" data-confirm="Release the selected addresses? Every router drops them within one poll interval.">Release</button>
+      <button class="btn" name="action" value="whitelist" data-confirm="Whitelist the selected addresses? They will be released now and cannot be blocked again while the rule exists.">Whitelist</button>
+      <button class="btn" name="action" value="reblock">Re-block</button>
+      <button class="btn danger" name="action" value="delete" data-confirm="Delete the selected addresses and all of their history? This cannot be undone.">Delete</button>
+      {{else}}<span class="dim">Read-only account</span>{{end}}
+    </div>
+
+    <table class="grid selectable-rows">
+      <thead>
+        <tr>
+          <th class="pick"><input type="checkbox" data-selectall aria-label="Select all rows"></th>
+          <th>Address</th>
+          <th>Country</th>
+          <th>Network</th>
+          <th class="num" title="How many different routers reported this">Routers</th>
+          <th class="num">Reports</th>
+          <th>First seen</th>
+          <th>Last seen</th>
+          <th>State</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Data.Rows}}
+        <tr>
+          <td class="pick"><input type="checkbox" name="id" value="{{.ID}}" data-row aria-label="Select {{.IP}}"></td>
+          <td><a class="mono" href="/addresses/{{.ID}}">{{.IP}}</a></td>
+          <td>{{if .Country}}<span title="{{if .CountryName}}{{.CountryName}}{{else}}{{.Country}}{{end}}">{{.Country}}</span>{{else}}<span class="dim">—</span>{{end}}</td>
+          <td class="dim" title="{{asnLabel .ASN .ASNOrg}}">{{if .ASN}}{{trunc 24 (asnLabel .ASN .ASNOrg)}}{{else}}—{{end}}</td>
+          <td class="num">{{if gt .DeviceCount 1}}<strong class="ok">{{.DeviceCount}}</strong>{{else}}{{.DeviceCount}}{{end}}</td>
+          <td class="num">{{comma .ReportCount}}</td>
+          <td class="dim" title="{{stamp .FirstSeen}}">{{age .FirstSeen $.Now}}</td>
+          <td class="dim" title="{{stamp .LastSeen}}">{{age .LastSeen $.Now}}</td>
+          <td>{{if eq .State "blocked"}}<span class="tag on">blocked</span>{{else}}<span class="tag off" title="{{.ReleaseReason}}">released</span>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </form>
+  {{template "pager" dict "Page" .Data.Page "Pages" .Data.Pages "Query" .Query}}
+  {{else}}
+  <p class="empty">Nothing matches this filter.</p>
+  {{end}}
+</section>
+
+{{if .Admin.CanWrite}}
+<section class="panel">
+  <header class="panel-head"><h2>Block addresses by hand</h2></header>
+  <form method="post" action="/addresses" class="stack">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label for="addresses">Addresses</label>
+    <textarea id="addresses" name="addresses" rows="3" required
+      placeholder="203.0.113.4, 198.51.100.9&#10;one per line or comma separated"></textarea>
+    <div class="row">
+      <div class="field grow">
+        <label for="notes">Reason <span class="opt">optional</span></label>
+        <input id="notes" name="notes" placeholder="why this is being blocked">
+      </div>
+      <div class="field">
+        <label for="days">Expire after <span class="opt">days</span></label>
+        <input id="days" name="days" type="number" min="0" max="3650" placeholder="never">
+      </div>
+      <div class="field actions"><button class="btn primary" type="submit">Block</button></div>
+    </div>
+    <p class="fine">Private, loopback and reserved ranges are rejected. Anything covered by a
+      whitelist rule is rejected too; remove the rule first.</p>
+  </form>
+</section>
+{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "address.html"}}{{template "head" .}}
+{{$a := .Data.A}}
+{{template "hintcard" dict "Key" "address" "Hints" .Hints "CSRF" .CSRF "Back" (print "/addresses/" $a.ID)}}
+
+<div class="crumbs"><a href="/addresses">Blocklist</a> <span>/</span> <span class="mono">{{$a.IP}}</span></div>
+
+<div class="cols">
+  <section class="panel grow">
+    <header class="panel-head">
+      <h1 class="mono">{{$a.IP}}</h1>
+      {{if eq $a.State "blocked"}}<span class="tag on">blocked</span>{{else}}<span class="tag off">released</span>{{end}}
+    </header>
+    <dl class="facts">
+      <dt>First seen</dt><dd>{{stamp $a.FirstSeen}} <span class="dim">({{age $a.FirstSeen .Now}})</span></dd>
+      <dt>Last seen</dt><dd>{{stamp $a.LastSeen}} <span class="dim">({{age $a.LastSeen .Now}})</span></dd>
+      <dt>Reported by</dt><dd><strong>{{$a.DeviceCount}}</strong> router(s), {{comma $a.ReportCount}} time(s)</dd>
+      <dt>Country</dt><dd>{{if $a.Country}}{{if $a.CountryName}}{{$a.CountryName}}{{else}}{{$a.Country}}{{end}} <span class="dim">({{$a.Country}})</span>{{else}}<span class="dim">not located</span>{{end}}</dd>
+      <dt>Network</dt><dd>{{asnLabel $a.ASN $a.ASNOrg}}</dd>
+      <dt>Family</dt><dd>IPv{{$a.Family}}</dd>
+      <dt>Source</dt><dd>{{$a.Source}}{{if $a.CreatedBy}} <span class="dim">by {{$a.CreatedBy}}</span>{{end}}</dd>
+      <dt>Blocked at</dt><dd>{{stamp $a.BlockedAt}}</dd>
+      <dt>Expires</dt><dd>{{if $a.ExpiresAt}}{{stamp $a.ExpiresAt}}{{else}}<span class="dim">never</span>{{end}}</dd>
+      {{if eq $a.State "released"}}<dt>Released</dt><dd>{{stamp $a.ReleasedAt}} <span class="dim">{{$a.ReleaseReason}}</span></dd>{{end}}
+    </dl>
+  </section>
+
+  {{if .Admin.CanWrite}}
+  <section class="panel side">
+    <header class="panel-head"><h2>Actions</h2></header>
+    <form method="post" action="/addresses/action" class="stack">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <input type="hidden" name="id" value="{{$a.ID}}">
+      <input type="hidden" name="back" value="/addresses/{{$a.ID}}">
+      {{if eq $a.State "blocked"}}
+      <button class="btn" name="action" value="release"
+        data-confirm="Release {{$a.IP}}? Every router drops it within one poll interval.">Release from every router</button>
+      {{else}}
+      <button class="btn" name="action" value="reblock">Block again</button>
+      {{end}}
+      <button class="btn" name="action" value="whitelist"
+        data-confirm="Whitelist {{$a.IP}}? It will be released and cannot be blocked again while the rule exists.">Whitelist permanently</button>
+      <button class="btn danger" name="action" value="delete"
+        data-confirm="Delete {{$a.IP}} and its history? This cannot be undone.">Delete and forget</button>
+    </form>
+    <form method="post" action="/addresses/{{$a.ID}}/notes" class="stack">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label for="notes">Note</label>
+      <textarea id="notes" name="notes" rows="3">{{$a.Notes}}</textarea>
+      <button class="btn" type="submit">Save note</button>
+    </form>
+  </section>
+  {{end}}
+</div>
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>Who reported this, and when</h2>
+    <span class="dim">Independent sightings from different sites are the strongest signal.</span>
+  </header>
+  {{if .Data.Reports}}
+  <table class="grid">
+    <thead><tr><th>Router</th><th>First saw it</th><th>Last saw it</th><th class="num">Times</th></tr></thead>
+    <tbody>
+      {{range .Data.Reports}}
+      <tr>
+        <td><a href="/devices/{{.DeviceID}}">{{.DeviceName}}</a></td>
+        <td>{{stamp .FirstAt}} <span class="dim">({{age .FirstAt $.Now}})</span></td>
+        <td>{{stamp .LastAt}} <span class="dim">({{age .LastAt $.Now}})</span></td>
+        <td class="num">{{comma .Count}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty">No router has reported this address; it was added by hand or imported.</p>
+  {{end}}
+</section>
+{{template "foot" .}}{{end}}
+
+
+{{define "whitelist.html"}}{{template "head" .}}
+{{template "hintcard" dict "Key" "whitelist" "Hints" .Hints "CSRF" .CSRF "Back" "/whitelist"}}
+
+{{if .Admin.CanWrite}}
+<section class="panel">
+  <header class="panel-head"><h2>Add a rule</h2></header>
+  <form method="post" action="/whitelist" class="row">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field">
+      <label for="cidr">Address or range</label>
+      <input id="cidr" name="cidr" placeholder="198.51.100.7 or 198.51.100.0/24" required>
+    </div>
+    <div class="field grow">
+      <label for="reason">Reason</label>
+      <input id="reason" name="reason" placeholder="branch office uplink">
+    </div>
+    <div class="field">
+      <label for="days">Expire after <span class="opt">days</span></label>
+      <input id="days" name="days" type="number" min="0" max="3650" placeholder="never">
+    </div>
+    <div class="field actions">
+      <button class="btn primary" type="submit">Add and release</button>
+      <a class="ghost" href="/whitelist/preview">Preview first</a>
+    </div>
+  </form>
+</section>
+{{end}}
+
+<section class="panel">
+  <header class="panel-head">
+    <h2>{{comma .Data.Total}} rule{{if ne .Data.Total 1}}s{{end}}</h2>
+    <form method="get" action="/whitelist" class="inline-search">
+      <input name="q" value="{{.Data.Q}}" placeholder="search" aria-label="Search whitelist">
+      <button class="ghost" type="submit">Search</button>
+    </form>
+  </header>
+  {{if .Data.Rows}}
+  <table class="grid">
+    <thead><tr><th>Range</th><th>Reason</th><th class="num">Released</th><th>Added</th><th>By</th><th>Expires</th><th></th></tr></thead>
+    <tbody>
+      {{range .Data.Rows}}
+      <tr>
+        <td class="mono">{{.CIDR}}</td>
+        <td>{{if .Reason}}{{.Reason}}{{else}}<span class="dim">—</span>{{end}}</td>
+        <td class="num">{{comma .Hits}}</td>
+        <td class="dim" title="{{stamp .CreatedAt}}">{{age .CreatedAt $.Now}}</td>
+        <td class="dim">{{.CreatedBy}}</td>
+        <td class="dim">{{if .ExpiresAt}}{{stamp .ExpiresAt}}{{else}}never{{end}}</td>
+        <td class="right">
+          {{if $.Admin.CanWrite}}
+          <form method="post" action="/whitelist/{{.ID}}/delete" class="inline">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <button class="ghost danger" type="submit"
+              data-confirm="Remove the rule for {{.CIDR}}? Addresses it released stay released until they are reported again.">Remove</button>
+          </form>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{template "pager" dict "Page" .Data.Page "Pages" .Data.Pages "Query" .Query}}
+  {{else}}
+  <p class="empty">No rules yet. Add your own office, monitoring and management ranges here so a
+    misconfigured probe can never take you offline.</p>
+  {{end}}
+</section>
+{{template "foot" .}}{{end}}
+
+
+{{define "whitelist_preview.html"}}{{template "head" .}}
+<div class="crumbs"><a href="/whitelist">Whitelist</a> <span>/</span> <span>Preview</span></div>
+<section class="panel">
+  <header class="panel-head"><h2>What would a rule release?</h2></header>
+  <form method="get" action="/whitelist/preview" class="row">
+    <div class="field grow">
+      <label for="cidr">Address or range</label>
+      <input id="cidr" name="cidr" value="{{.Data.CIDR}}" placeholder="198.51.100.0/24" autofocus>
+    </div>
+    <div class="field actions"><button class="btn" type="submit">Preview</button></div>
+  </form>
+  {{if .Data.Error}}<div class="flash err">{{.Data.Error}}</div>{{end}}
+  {{with .Data.Preview}}
+  <p class="lead">
+    <strong class="mono">{{.CIDR}}</strong> currently covers
+    <strong>{{comma .Total}}</strong> blocked address{{if ne .Total 1}}es{{end}}.
+    Adding this rule releases them from every router and stops them being blocked again.
+  </p>
+  {{if .Samples}}
+  <table class="grid">
+    <thead><tr><th>Address</th><th>Country</th><th class="num">Routers</th><th class="num">Reports</th><th>Last seen</th></tr></thead>
+    <tbody>
+      {{range .Samples}}
+      <tr>
+        <td><a class="mono" href="/addresses/{{.ID}}">{{.IP}}</a></td>
+        <td>{{if .Country}}<span title="{{if .CountryName}}{{.CountryName}}{{else}}{{.Country}}{{end}}">{{.Country}}</span>{{else}}<span class="dim">—</span>{{end}}</td>
+        <td class="num">{{.DeviceCount}}</td>
+        <td class="num">{{comma .ReportCount}}</td>
+        <td class="dim">{{age .LastSeen $.Now}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{if gt .Total 25}}<p class="fine">Showing the 25 most reported of {{comma .Total}}.</p>{{end}}
+  {{end}}
+  {{if $.Admin.CanWrite}}
+  <form method="post" action="/whitelist" class="row">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}">
+    <input type="hidden" name="cidr" value="{{.CIDR}}">
+    <div class="field grow">
+      <label for="reason">Reason</label>
+      <input id="reason" name="reason" placeholder="why this range must never be blocked">
+    </div>
+    <div class="field actions">
+      <button class="btn primary" type="submit"
+        data-confirm="Add the whitelist rule for {{.CIDR}} and release {{.Total}} address(es)?">Add this rule</button>
+    </div>
+  </form>
+  {{end}}
+  {{end}}
+</section>
+{{template "foot" .}}{{end}}

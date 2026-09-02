@@ -1,0 +1,95 @@
+{{define "login.html"}}{{template "head" .}}
+<div class="panel narrow auth">
+  <h1>Sign in</h1>
+  <p class="sub">{{.Instance}} console</p>
+  {{if .Data.Error}}<div class="flash err">{{.Data.Error}}</div>{{end}}
+  <form method="post" action="/login" autocomplete="on">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <label for="username">Username</label>
+    <input id="username" name="username" value="{{.Data.Username}}" autocomplete="username" autofocus required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit" class="btn primary">Continue</button>
+  </form>
+  <p class="fine">A second factor is required after this step.</p>
+</div>
+{{template "foot" .}}{{end}}
+
+
+{{define "totp.html"}}{{template "head" .}}
+<div class="panel narrow auth">
+  <h1>Authentication code</h1>
+  <p class="sub">Enter the six-digit code from your authenticator app.</p>
+  {{if .Data.Error}}<div class="flash err">{{.Data.Error}}</div>{{end}}
+  <form method="post" action="/login/2fa">
+    <input type="hidden" name="csrf" value="{{.Data.CSRF}}">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <label for="code">Code</label>
+    <input id="code" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="9"
+           autocomplete="one-time-code" class="code" autofocus required>
+    <button type="submit" class="btn primary">Sign in</button>
+  </form>
+  <form method="post" action="/logout" class="cancel">
+    <input type="hidden" name="csrf" value="{{.Data.CSRF}}">
+    <button type="submit" class="ghost">Cancel</button>
+  </form>
+</div>
+{{template "foot" .}}{{end}}
+
+
+{{define "setup.html"}}{{template "head" .}}
+<div class="panel narrow auth">
+  <h1>Create the first administrator</h1>
+  <p class="sub">This page is only reachable while no account exists.</p>
+  {{if .Data.Error}}<div class="flash err">{{.Data.Error}}</div>{{end}}
+  <form method="post" action="/setup" autocomplete="off">
+    {{if .Data.NeedCode}}
+    <label for="code">Setup code</label>
+    <input id="code" name="code" autofocus required>
+    <p class="fine">Printed in the server log at startup. Look for “setup code”.</p>
+    {{end}}
+    <label for="username">Username</label>
+    <input id="username" name="username" value="{{.Data.Username}}" autocomplete="username" required>
+    <label for="display_name">Display name <span class="opt">optional</span></label>
+    <input id="display_name" name="display_name">
+    <label for="email">Email <span class="opt">optional</span></label>
+    <input id="email" name="email" type="email" autocomplete="email">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" required
+           minlength="{{.Data.MinLen}}">
+    <label for="password2">Repeat password</label>
+    <input id="password2" name="password2" type="password" autocomplete="new-password" required>
+    <p class="fine">At least {{.Data.MinLen}} characters. Length is what matters; there are no
+      composition rules to work around. A passphrase of four or five unrelated words is ideal.</p>
+    <button type="submit" class="btn primary">Create account</button>
+  </form>
+</div>
+{{template "foot" .}}{{end}}
+
+
+{{define "enroll.html"}}{{template "head" .}}
+<div class="panel narrow auth">
+  <h1>Set up two-factor authentication</h1>
+  <p class="sub">Required before you can use the console.</p>
+  {{if .Data.Error}}<div class="flash err">{{.Data.Error}}</div>{{end}}
+  <ol class="steps">
+    <li>Scan this code with an authenticator app.</li>
+    <li>Enter the six digits it shows.</li>
+  </ol>
+  <p class="qr"><img src="/account/2fa/qr.png" alt="Enrolment QR code" width="220" height="220"></p>
+  <details>
+    <summary>Type it in instead</summary>
+    <p class="mono selectable">{{.Data.Manual}}</p>
+    <p class="fine">Time-based, SHA-1, 6 digits, 30-second period.</p>
+  </details>
+  <form method="post" action="/account/2fa">
+    <input type="hidden" name="csrf" value="{{.Data.CSRF}}">
+    <label for="code">Code from the app</label>
+    <input id="code" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="9"
+           autocomplete="one-time-code" class="code" required>
+    <button type="submit" class="btn primary">Confirm and finish</button>
+  </form>
+  <p class="fine">Keep a copy of the secret somewhere safe, or an owner will have to reset your
+    second factor if you lose the device.</p>
+</div>
+{{template "foot" .}}{{end}}

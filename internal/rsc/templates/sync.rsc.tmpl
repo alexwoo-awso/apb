@@ -1,0 +1,63 @@
+# APB incremental sync for {{.DeviceName}}.
+# Applies the changes the server has queued since the cursor held in RAM.
+# Entries are added with a timeout so RouterOS keeps them in memory and never
+# writes them to flash.
+:local Url "{{.BaseURL}}/api/v1"
+:local Token "{{.Token}}"
+:local List "{{.ListName}}"
+:local UA "{{.UserAgent}}"
+:local Timeout {{.BlockTimeout}}
+:local MaxLoops {{.MaxLoops}}
+:global apbCursor
+:global apbLock
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Now [/system resource get uptime]
+:local Run true
+:if ([:typeof $apbLock] = "time") do={ :if (($Now - $apbLock) < 3m) do={ :set Run false } }
+:if ($Run) do={
+:set apbLock $Now
+:do {
+:if ([:typeof $apbCursor] != "num") do={
+:log info "APB: no cursor in memory, rebuilding the list"
+/system script run {{.Prefix}}bootstrap
+} else={
+:local More true
+:local Loops 0
+:do {
+:set More false
+:set Loops ($Loops + 1)
+:local Held [:len [/ip firewall address-list find list=$List]]
+:local Res ""
+:do { :set Res [/tool fetch url=($Url . "/sync?c=" . $apbCursor . "&n=" . $Held) http-method=get http-header-field=$Hdr check-certificate={{.VerifyCert}} output=user as-value] } on-error={ :log warning "APB: sync request failed" }
+:if ([:typeof $Res] = "array") do={
+:if (($Res->"status") = "finished") do={
+:local Next -1
+:local Resync false
+:local Added 0
+:local Removed 0
+:foreach Tok in=[:toarray ($Res->"data")] do={
+:if ([:len $Tok] > 1) do={
+:local K [:pick $Tok 0 1]
+:local V [:pick $Tok 1 [:len $Tok]]
+:if ($K = "+") do={ {{template "add" .}} }
+:if ($K = "-") do={ {{template "del" .}} }
+:if ($K = "c") do={ :set Next [:tonum $V] }
+:if ($K = "m") do={ :set More true }
+:if ($K = "r") do={ :set Resync true }
+}
+}
+:if ($Resync) do={
+:log info "APB: cursor too old, falling back to a full rebuild"
+:set More false
+/system script run {{.Prefix}}bootstrap
+} else={
+:if ($Next >= 0) do={ :set apbCursor $Next }
+:if (($Added + $Removed) > 0) do={ :log info ("APB: applied +" . $Added . " -" . $Removed . ", cursor " . $apbCursor) }
+}
+}
+}
+} while=($More && ($Loops < $MaxLoops))
+}
+} on-error={ :log error "APB: sync script aborted" }
+:set apbLock
+}

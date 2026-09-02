@@ -1,0 +1,51 @@
+# APB report for {{.DeviceName}}.
+# Uploads the addresses your own firewall rules have put into the detection
+# list. Already-reported addresses are tracked in a second RAM-only list, so
+# nothing is sent twice and nothing is written to flash.
+:local Url "{{.BaseURL}}/api/v1"
+:local Token "{{.Token}}"
+:local Detect "{{.DetectList}}"
+:local Sent "{{.SentList}}"
+:local UA "{{.UserAgent}}"
+:local SentTimeout {{.SentTimeout}}
+:local MaxBatch {{.MaxBatch}}
+:global apbReportLock
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Now [/system resource get uptime]
+:local Run true
+:if ([:typeof $apbReportLock] = "time") do={ :if (($Now - $apbReportLock) < 10m) do={ :set Run false } }
+:if ($Run) do={
+:set apbReportLock $Now
+:do {
+:local Payload ""
+:local Count 0
+:foreach Id in=[/ip firewall address-list find list=$Detect] do={
+:if ($Count < $MaxBatch) do={
+:local A ""
+:do { :set A [/ip firewall address-list get $Id address] } on-error={}
+:if ([:len $A] > 0) do={
+:if ([:len [/ip firewall address-list find list=$Sent address=$A]] = 0) do={
+:if ($Count > 0) do={ :set Payload ($Payload . ",") }
+:set Payload ($Payload . $A)
+:set Count ($Count + 1)
+}
+}
+}
+}
+:if ($Count > 0) do={
+:local Meta (",Content-Type: text/plain,X-Apb-Identity: " . [/system identity get name] . ",X-Apb-Ros: " . [/system resource get version] . ",X-Apb-Model: " . [/system resource get board-name])
+:local Res ""
+:do { :set Res [/tool fetch url=($Url . "/report") http-method=post http-data=$Payload http-header-field=($Hdr . $Meta) check-certificate={{.VerifyCert}} output=user as-value] } on-error={ :log warning "APB: report request failed" }
+:if ([:typeof $Res] = "array") do={
+:if (($Res->"status") = "finished") do={
+:local Data ($Res->"data")
+:if ([:pick $Data 0 2] = "ok") do={
+:foreach A in=[:toarray $Payload] do={ :do { /ip firewall address-list add list=$Sent address=$A timeout=$SentTimeout comment="apb-sent" } on-error={} }
+:log info ("APB: reported " . $Count . " addresses")
+} else={ :log warning ("APB: report rejected: " . $Data) }
+}
+}
+}
+} on-error={ :log error "APB: report script aborted" }
+:set apbReportLock
+}

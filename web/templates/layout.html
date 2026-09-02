@@ -1,0 +1,94 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{{.Title}} · {{.Instance}}</title>
+<link rel="stylesheet" href="/static/app.css?v={{.Asset}}">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{{if .Admin.ID}}
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>{{.Instance}}</a>
+  <nav class="mainnav" aria-label="Sections">
+    <a href="/"           {{if eq .Nav "dashboard"}}class="on" aria-current="page"{{end}}>Dashboard</a>
+    <a href="/addresses"  {{if eq .Nav "addresses"}}class="on" aria-current="page"{{end}}>Blocklist</a>
+    <a href="/whitelist"  {{if eq .Nav "whitelist"}}class="on" aria-current="page"{{end}}>Whitelist</a>
+    <a href="/devices"    {{if eq .Nav "devices"}}class="on" aria-current="page"{{end}}>Devices</a>
+    <a href="/activity"   {{if eq .Nav "activity"}}class="on" aria-current="page"{{end}}>Activity</a>
+    <a href="/audit"      {{if eq .Nav "audit"}}class="on" aria-current="page"{{end}}>Audit</a>
+    <a href="/users"      {{if eq .Nav "users"}}class="on" aria-current="page"{{end}}>Users</a>
+    <a href="/settings"   {{if eq .Nav "settings"}}class="on" aria-current="page"{{end}}>Settings</a>
+  </nav>
+  <div class="userbox">
+    <a href="/help" class="ghost" title="Help and guidance">?</a>
+    <a href="/account" class="who" title="{{.Admin.Role}}">{{.Admin.Username}}</a>
+    <form method="post" action="/logout" class="inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="ghost" type="submit">Sign out</button>
+    </form>
+  </div>
+</header>
+{{end}}
+<main id="main" class="wrap">
+{{range .Flashes}}<div class="flash {{.Kind}}" role="status">{{.Text}}</div>{{end}}
+{{end}}
+
+
+{{define "foot"}}
+</main>
+<footer class="foot">
+  <span>{{.Instance}} · APB {{.Version}}</span>
+  <span>Times are UTC</span>
+</footer>
+<script src="/static/app.js?v={{.Asset}}" defer></script>
+</body>
+</html>
+{{end}}
+
+
+{{/* An explainer card, shown once per account per section. */}}
+{{define "hintcard"}}
+{{$h := hint .Key}}
+{{if and $h.Key (not (index .Hints .Key))}}
+<aside class="hint" aria-labelledby="hint-{{$h.Key}}">
+  <div class="hint-body">
+    <h2 id="hint-{{$h.Key}}">{{$h.Title}}</h2>
+    {{$h.Body}}
+    {{if $h.Steps}}<ol class="hint-steps">{{range $h.Steps}}<li>{{.}}</li>{{end}}</ol>{{end}}
+  </div>
+  <form method="post" action="/hints/dismiss" class="hint-dismiss">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="hint" value="{{$h.Key}}">
+    <input type="hidden" name="back" value="{{.Back}}">
+    <button type="submit" class="ghost" title="Hide this explanation">Got it</button>
+  </form>
+</aside>
+{{end}}
+{{end}}
+
+
+{{/* Pagination control. Expects Page, Pages and Query. */}}
+{{define "pager"}}
+{{if gt .Pages 1}}
+<nav class="pager" aria-label="Pages">
+  {{if gt .Page 1}}<a href="{{qs .Query "page" 1}}">First</a>
+  <a href="{{qs .Query "page" (sub .Page 1)}}">Previous</a>{{end}}
+  <span>Page {{.Page}} of {{.Pages}}</span>
+  {{if lt .Page .Pages}}<a href="{{qs .Query "page" (add .Page 1)}}">Next</a>
+  <a href="{{qs .Query "page" .Pages}}">Last</a>{{end}}
+</nav>
+{{end}}
+{{end}}
+
+
+{{define "error.html"}}{{template "head" .}}
+<div class="panel narrow">
+  <h1>{{.Data.Code}} · {{.Title}}</h1>
+  <p>{{.Data.Message}}</p>
+  <p><a class="btn" href="/">Back to the dashboard</a></p>
+</div>
+{{template "foot" .}}{{end}}
