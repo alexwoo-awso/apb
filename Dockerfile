@@ -12,7 +12,7 @@ RUN go mod download
 
 COPY . .
 
-ARG VERSION=2.0.6
+ARG VERSION=2.0.7
 ARG COMMIT=""
 ARG DATE=""
 

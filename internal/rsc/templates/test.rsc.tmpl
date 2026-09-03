@@ -11,6 +11,8 @@
 :local Url "{{.BaseURL}}/api/v1"
 :local Token "{{.Token}}"
 :local UA "{{.UserAgent}}"
+:local State "{{.ListName}}_probe"
+:local Timeout {{.BlockTimeout}}
 :local Auth ("Authorization: Bearer " . $Token)
 :local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
 :local Target ($Url . "/whoami?k=" . $UA)
@@ -36,4 +38,15 @@
 :do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",User-Agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe B, capitalised User-Agent: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe B, capitalised User-Agent: REFUSED by RouterOS" }
 :do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",user-agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe C, lowercase user-agent: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe C, lowercase user-agent: REFUSED by RouterOS" }
 :do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",X-Apb-Agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe D, custom X- header: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe D, custom X- header: REFUSED by RouterOS" }
-:log info "APB test: done. The identity travels in the URL, so a REFUSED probe costs nothing; it only records what this build tolerates."
+:log info "APB test: done with headers. The identity travels in the URL, so a REFUSED probe costs nothing; it only records what this build tolerates."
+
+# Address-list write probe. Everything this project installs depends on being
+# able to add an entry that carries a timeout, because a timeout is what keeps
+# the entry in RAM instead of on flash. These probe that directly, in a throwaway
+# list, so a refusal is attributed to the exact operation rather than inferred.
+:do { /ip firewall address-list add list=$State address={{.StateAddress}} timeout=$Timeout comment="probe" ; :log info "APB test: write E, address with timeout and comment: OK" } on-error={ :log error "APB test: write E, address with timeout and comment: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] ; :log info "APB test: write F, remove a list that has entries: OK" } on-error={ :log error "APB test: write F, remove a list that has entries: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] ; :log info "APB test: write G, remove a list that is already empty: OK" } on-error={ :log error "APB test: write G, remove a list that is already empty: REFUSED - this is what breaks recording the cursor" }
+:do { /ip firewall address-list add list=$State address={{.StateAddress}} timeout=$Timeout ; :log info "APB test: write H, address with timeout and no comment: OK" } on-error={ :log error "APB test: write H, address with timeout and no comment: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:log info "APB test: finished. Every write above uses a timeout, so nothing this script does can reach the router's flash."

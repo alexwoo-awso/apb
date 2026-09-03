@@ -1,5 +1,5 @@
 # APB scripts for "edge-1" (RouterOS v6)
-# Generated 2026-09-03 18:26:17Z by APB.
+# Generated 2026-09-03 18:40:55Z by APB.
 #
 # This file contains the API token for this router. Treat it as a password:
 # do not commit it, do not share it, and remove the file from the router once
@@ -38,8 +38,10 @@
 :set apbSrc ($apbSrc . ":if (\$K = \"-\") do={ :do { /ip firewall address-list remove [find list=\$List address=\$V] ; :set Removed (\$Removed + 1) } on-error={} }\r\n")
 :set apbSrc ($apbSrc . ":if (\$K = \"c\") do={ :set Next [:tonum \$V] }\r\n:if (\$K = \"m\") do={ :set More true }\r\n:if (\$K = \"r\") do={ :set Resync true }\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . ":if (\$Resync) do={\r\n:log info \"APB: cursor too old, falling back to a full rebuild\"\r\n:set More false\r\n/system script run apb-bootstrap\r\n} else={\r\n")
-:set apbSrc ($apbSrc . ":if (\$Next >= 0) do={ :if (\$Next != \$apbCursor) do={ :set apbCursor \$Next ; :do { /ip firewall address-list remove [find list=\$State] ; /ip firewall address-list add")
-:set apbSrc ($apbSrc . " list=\$State address=0.0.0.1 comment=(\"\" . \$apbCursor) timeout=\$Timeout } on-error={ :log warning \"APB: could not record the cursor\" } } }\r\n")
+:set apbSrc ($apbSrc . ":if (\$Next >= 0) do={ :if (\$Next != \$apbCursor) do={ :set apbCursor \$Next ; :local StIds [/ip firewall address-list find list=\$State] ; :if ([:len \$StIds] > 0) do={")
+:set apbSrc ($apbSrc . " :do { /ip firewall address-list remove \$StIds } on-error={ :log warning \"APB: could not clear the previous cursor marker\" } } ; :do { /ip firewall address-list add li")
+:set apbSrc ($apbSrc . "st=\$State address=192.0.2.1 comment=(\"\" . \$apbCursor) timeout=\$Timeout } on-error={ :log warning (\"APB: could not record cursor \" . \$apbCursor . \" in \" . \$Stat")
+:set apbSrc ($apbSrc . "e . \" - the router refused the address-list write\") } } }\r\n")
 :set apbSrc ($apbSrc . ":if ((\$Added + \$Removed) > 0) do={ :log info (\"APB: applied +\" . \$Added . \" -\" . \$Removed . \", cursor \" . \$apbCursor) }\r\n}\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . "} while=(\$More && (\$Loops < \$MaxLoops))\r\n}\r\n} on-error={ :log error \"APB: sync script aborted\" }\r\n:set apbLock\r\n}\r\n")
 :do { /system script remove [find name="apb-sync"] } on-error={ :log debug "APB: no previous apb-sync" }
@@ -66,10 +68,11 @@
 :set apbSrc ($apbSrc . "} else={ :set Failed true ; :log warning (\"APB: rebuild got fetch status \" . (\$Res->\"status\")) }\r\n")
 :set apbSrc ($apbSrc . "} else={ :set Failed true ; :log warning \"APB: rebuild got no reply from the server\" }\r\n}\r\n} while=((!\$Failed) && (\$Next > 0) && (\$Page < \$MaxPages))\r\n")
 :set apbSrc ($apbSrc . ":if (\$Failed) do={\r\n:log error (\"APB: rebuild failed on page \" . \$Page . \", the sync script will retry. Run \" . \"apb-test\" . \" to see why.\")\r\n} else={\r\n")
-:set apbSrc ($apbSrc . ":if (\$NewCursor >= 0) do={ :set apbCursor \$NewCursor ; :do { /ip firewall address-list remove [find list=\$State] ; /ip firewall address-list add list=\$State address=0")
-:set apbSrc ($apbSrc . ".0.0.1 comment=(\"\" . \$apbCursor) timeout=\$Timeout } on-error={ :log warning \"APB: could not record the cursor\" } }\r\n")
-:set apbSrc ($apbSrc . ":log info (\"APB: rebuild complete, \" . \$Total . \" addresses, cursor now \" . \$apbCursor)\r\n}\r\n} on-error={ :log error \"APB: rebuild script aborted\" }\r\n")
-:set apbSrc ($apbSrc . ":set apbBootLock\r\n}\r\n")
+:set apbSrc ($apbSrc . ":if (\$NewCursor >= 0) do={ :set apbCursor \$NewCursor ; :local StIds [/ip firewall address-list find list=\$State] ; :if ([:len \$StIds] > 0) do={ :do { /ip firewall add")
+:set apbSrc ($apbSrc . "ress-list remove \$StIds } on-error={ :log warning \"APB: could not clear the previous cursor marker\" } } ; :do { /ip firewall address-list add list=\$State address=192.")
+:set apbSrc ($apbSrc . "0.2.1 comment=(\"\" . \$apbCursor) timeout=\$Timeout } on-error={ :log warning (\"APB: could not record cursor \" . \$apbCursor . \" in \" . \$State . \" - the router ref")
+:set apbSrc ($apbSrc . "used the address-list write\") } }\r\n:log info (\"APB: rebuild complete, \" . \$Total . \" addresses, cursor now \" . \$apbCursor)\r\n}\r\n")
+:set apbSrc ($apbSrc . "} on-error={ :log error \"APB: rebuild script aborted\" }\r\n:set apbBootLock\r\n}\r\n")
 :do { /system script remove [find name="apb-bootstrap"] } on-error={ :log debug "APB: no previous apb-bootstrap" }
 /system script add name="apb-bootstrap" policy=read,write,test dont-require-permissions=no comment="APB: rebuilds the whole list after a reboot" source=$apbSrc
 
@@ -111,8 +114,8 @@
 :set apbSrc ($apbSrc . "# APB connectivity test for edge-1.\r\n# Run it by hand and read the log:\r\n#   /system script run apb-test\r\n#   /log print where message~\"APB test\"\r\n#\r\n")
 :set apbSrc ($apbSrc . "# It makes one call the way the real scripts do, then probes four header shapes\r\n# to show which ones this RouterOS build actually accepts. RouterOS sets some\r\n")
 :set apbSrc ($apbSrc . "# headers itself and rejects the whole fetch for others, and the failure is\r\n# indistinguishable from a network problem, so this measures it rather than\r\n")
-:set apbSrc ($apbSrc . "# assuming.\r\n:local Url \"https://apb.example.org/api/v1\"\r\n:local Token \"apb_SAMPLETOKENONLY000000\"\r\n:local UA \"apb-router\"\r\n")
-:set apbSrc ($apbSrc . ":local Auth (\"Authorization: Bearer \" . \$Token)\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n")
+:set apbSrc ($apbSrc . "# assuming.\r\n:local Url \"https://apb.example.org/api/v1\"\r\n:local Token \"apb_SAMPLETOKENONLY000000\"\r\n:local UA \"apb-router\"\r\n:local State \"APB_probe\"\r\n")
+:set apbSrc ($apbSrc . ":local Timeout 520w\r\n:local Auth (\"Authorization: Bearer \" . \$Token)\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n")
 :set apbSrc ($apbSrc . ":local Target (\$Url . \"/whoami\?k=\" . \$UA)\r\n:local Res \"\"\r\n\r\n:log info (\"APB test: calling \" . \$Target . \" as https, certificate check no\")\r\n")
 :set apbSrc ($apbSrc . ":do { :set Res [/tool fetch url=\$Target http-method=get http-header-field=\$Hdr mode=https check-certificate=no output=user as-value] } on-error={ :log error \"APB test:")
 :set apbSrc ($apbSrc . " the real request failed. Causes in order of likelihood: the name does not resolve, there is no route to the server, or the certificate is rejected.\" }\r\n")
@@ -132,7 +135,18 @@
 :set apbSrc ($apbSrc . "\" }\r\n")
 :set apbSrc ($apbSrc . ":do { :set Probe [/tool fetch url=\$Target http-method=get http-header-field=(\$Auth . \",X-Apb-Agent: \" . \$UA) mode=https check-certificate=no output=user as-value] ; ")
 :set apbSrc ($apbSrc . ":log info (\"APB test: probe D, custom X- header: \" . (\$Probe->\"status\")) } on-error={ :log warning \"APB test: probe D, custom X- header: REFUSED by RouterOS\" }\r\n")
-:set apbSrc ($apbSrc . ":log info \"APB test: done. The identity travels in the URL, so a REFUSED probe costs nothing; it only records what this build tolerates.\"\r\n")
+:set apbSrc ($apbSrc . ":log info \"APB test: done with headers. The identity travels in the URL, so a REFUSED probe costs nothing; it only records what this build tolerates.\"\r\n\r\n")
+:set apbSrc ($apbSrc . "# Address-list write probe. Everything this project installs depends on being\r\n# able to add an entry that carries a timeout, because a timeout is what keeps\r\n")
+:set apbSrc ($apbSrc . "# the entry in RAM instead of on flash. These probe that directly, in a throwaway\r\n# list, so a refusal is attributed to the exact operation rather than inferred.\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=192.0.2.1 timeout=\$Timeout comment=\"probe\" ; :log info \"APB test: write E, address with timeout and comment: ")
+:set apbSrc ($apbSrc . "OK\" } on-error={ :log error \"APB test: write E, address with timeout and comment: REFUSED\" }\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list remove [find list=\$State] ; :log info \"APB test: write F, remove a list that has entries: OK\" } on-error={ :log error \"APB test: write")
+:set apbSrc ($apbSrc . " F, remove a list that has entries: REFUSED\" }\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list remove [find list=\$State] ; :log info \"APB test: write G, remove a list that is already empty: OK\" } on-error={ :log error \"APB test: ")
+:set apbSrc ($apbSrc . "write G, remove a list that is already empty: REFUSED - this is what breaks recording the cursor\" }\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=192.0.2.1 timeout=\$Timeout ; :log info \"APB test: write H, address with timeout and no comment: OK\" } on-error")
+:set apbSrc ($apbSrc . "={ :log error \"APB test: write H, address with timeout and no comment: REFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
+:set apbSrc ($apbSrc . ":log info \"APB test: finished. Every write above uses a timeout, so nothing this script does can reach the router's flash.\"\r\n")
 :do { /system script remove [find name="apb-test"] } on-error={ :log debug "APB: no previous apb-test" }
 /system script add name="apb-test" policy=read,write,test dont-require-permissions=no comment="APB: one-shot connectivity check, run it by hand" source=$apbSrc
 

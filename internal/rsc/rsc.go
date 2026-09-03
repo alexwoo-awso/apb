@@ -54,6 +54,11 @@ type Params struct {
 	// anyone on the path, so production always leaves this false.
 	AllowInsecureURL bool
 
+	// StateAddress is the placeholder address of the cursor marker entry. It is
+	// never matched by any firewall rule; only the list membership and the
+	// comment matter.
+	StateAddress string
+
 	Prefix    string
 	Policy    string
 	MaxLoops  int
@@ -90,6 +95,7 @@ func FromDevice(d model.Device, baseURL, instance, token, userAgent string) Para
 		UserAgent:      userAgent,
 		VerifyCert:     d.VerifyCert,
 		IPv6:           d.IPv6,
+		StateAddress:   "192.0.2.1",
 		Prefix:         "apb-",
 		Policy:         "read,write,test",
 		MaxLoops:       20,

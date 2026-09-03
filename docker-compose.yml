@@ -13,8 +13,8 @@ services:
     build:
       context: .
       args:
-        VERSION: ${APB_VERSION:-2.0.6}
-    image: apb:${APB_VERSION:-2.0.6}
+        VERSION: ${APB_VERSION:-2.0.7}
+    image: apb:${APB_VERSION:-2.0.7}
     container_name: apb
     restart: unless-stopped
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.0.7 — 2026-09-03
+
+### Fixed
+
+- **Recording the cursor failed, and said only that it had failed.** The removal
+  of the previous marker and the write of the new one shared one guarded block,
+  so whichever failed produced the same message and skipped the other. RouterOS
+  errors on a removal that matches nothing, and on the first run the state list
+  does not exist, which aborted the block before anything was written. The two
+  operations are now separate, each reporting itself, and the removal only runs
+  when there is something to remove.
+- The marker uses `192.0.2.1`, a documentation address that cannot be confused
+  with a real target, instead of `0.0.0.1`.
+
+### Added
+
+- `apb-test` now probes the address-list write directly, in a throwaway list:
+  an entry with a timeout and a comment, one without a comment, a removal of a
+  list with entries, and a removal of one already empty. Every probe carries a
+  timeout, so the diagnostic itself can never write to the router's flash.
+
 ## 2.0.6 — 2026-09-03
 
 ### Fixed
