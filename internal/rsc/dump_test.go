@@ -20,6 +20,7 @@ func TestDumpBundle(t *testing.T) {
 	}{{"v7", "v7", false}, {"v7-ipv6", "v7", true}, {"v6", "v6", false}} {
 		d := testDevice()
 		d.ROSBranch = tc.branch
+		d.BlockTimeout = DefaultBlockTimeout(tc.branch)
 		d.IPv6 = tc.ipv6
 		if tc.branch == "v6" {
 			d.VerifyCert = "no"

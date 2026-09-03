@@ -36,12 +36,13 @@
 :local Next -1
 :local Resync false
 :local Added 0
+:local Recv 0
 :local Removed 0
 :foreach Tok in=[:toarray ($Res->"data")] do={
 :if ([:len $Tok] > 1) do={
 :local K [:pick $Tok 0 1]
 :local V [:pick $Tok 1 [:len $Tok]]
-:if ($K = "+") do={ {{template "add" .}} }
+:if ($K = "+") do={ :set Recv ($Recv + 1) ; {{template "add" .}} }
 :if ($K = "-") do={ {{template "del" .}} }
 :if ($K = "c") do={ :set Next [:tonum $V] }
 :if ($K = "m") do={ :set More true }
@@ -54,6 +55,7 @@
 /system script run {{.Prefix}}bootstrap
 } else={
 :if ($Next >= 0) do={ :if ($Next != $apbCursor) do={ :set apbCursor $Next ; {{template "savecursor" .}} } }
+:if (($Recv > 0) && ($Added = 0)) do={ :log error ("APB: the server sent " . $Recv . " addresses and this router stored none of them. It is refusing timeout={{.BlockTimeout}} on an address-list entry. Lower the entry timeout on the device page, regenerate the bundle and reinstall it.") }
 :if (($Added + $Removed) > 0) do={ :log info ("APB: applied +" . $Added . " -" . $Removed . ", cursor " . $apbCursor) }
 }
 }

@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.1.2 — 2026-09-04
+
+### Changed
+
+- **Each device now gets the longest entry timeout proven to work on its
+  RouterOS branch**, rather than one conservative value for both: `4w` on
+  RouterOS 6, `8w` on RouterOS 7. Leaving the global default empty selects the
+  per-branch maximum; an override is applied only where that branch is known to
+  accept it, so a default suited to RouterOS 7 cannot silently break every
+  RouterOS 6 device added afterwards.
+- RouterOS 6 is proven only to `4w` because the finer probes did not exist when
+  the 6.49 device was measured. It may well accept more; `apb-test` will say.
+
+### Added
+
+- **The scripts now count what they were sent against what they kept.** A router
+  that refuses the entry timeout stores nothing while the fetch, the cursor and
+  the rebuild message all look like success — the combination that hid this for
+  nine releases. Both `apb-sync` and `apb-bootstrap` now log the mismatch and
+  name the timeout being refused, with the fix.
+- The device page warns when a timeout exceeds what its branch is proven to
+  accept. It warns rather than refuses, since an operator may have measured
+  further with `apb-test`.
+
 ## 2.1.1 — 2026-09-03
 
 **The address-list timeout ceiling is a RouterOS property, not a RouterOS 6

@@ -178,6 +178,14 @@
             <option value="no" {{if eq $d.VerifyCert "no"}}selected{{end}}>Do not verify</option>
           </select></div>
       </div>
+      {{if not .Data.TimeoutProven}}
+      <div class="flash warn">The entry timeout <strong class="mono">{{$d.BlockTimeout}}</strong> is
+        longer than RouterOS {{$d.ROSBranch}} has been observed to accept, which is
+        <strong class="mono">{{.Data.TimeoutMax}}</strong>. RouterOS refuses the entry rather than
+        shortening it, so if this router will not take it, it will store nothing at all while still
+        reporting a clean rebuild. Run <span class="mono">apb-test</span> on the router: if it
+        reports this value as OK, ignore this warning.</div>
+      {{end}}
       {{if eq $d.VerifyCert "no"}}
       <div class="flash warn">This router does not verify the server certificate, so its token could be
         captured by anyone able to intercept the connection. RouterOS 7 can verify out of the box;

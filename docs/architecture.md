@@ -88,7 +88,8 @@ Measured on real hardware:
 | 6.49.20 | ok | ok | | | | refused | refused |
 | 7.x | ok | ok | ok | ok | ok | refused | refused |
 
-The default is `4w` and the generator refuses more than `8w`. Two published
+Each device gets the longest value proven on its branch, `4w` on RouterOS 6 and
+`8w` on RouterOS 7, and the generator refuses more than `8w`. Two published
 figures do not survive contact with the hardware: the documented maximum of
 4 294 967 295 seconds, and the 536 870 911 second threshold above which a
 timeout displays as `0sec`. Neither describes this field. The value that matters

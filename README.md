@@ -46,9 +46,16 @@ reports a clean rebuild, and holds nothing at all. Measured on real hardware:
 | RouterOS 6.49.20 | ok | ok | | | | refused | refused |
 | RouterOS 7.x | ok | ok | ok | ok | ok | refused | refused |
 
-The default is `4w`, which works everywhere tested; `8w` is the largest value
-observed to work anywhere, and the generator refuses more. Run
-`/system script run apb-test` on a router to find its own ceiling.
+Each device gets the longest value proven to work on its branch: **`4w` on
+RouterOS 6, `8w` on RouterOS 7.** The generator refuses more than `8w`, nothing
+above that having worked anywhere. Run `/system script run apb-test` on a router
+to find its own ceiling — RouterOS 6 is only proven to `4w` because the finer
+probes did not exist when the 6.49 device was measured, so it may well take
+more.
+
+If a router does refuse the timeout it will store nothing while every other
+signal looks like success, so the scripts now count what they were sent against
+what they kept and say so explicitly.
 
 MikroTik's documentation gives a maximum of 4294967295 seconds. That figure does
 not describe this field: a 7.x router refuses 52w. Trust the probe, not the

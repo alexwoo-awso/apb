@@ -55,13 +55,14 @@
     <div class="field"><label for="default_detect_list">Detection list</label>
       <input id="default_detect_list" name="default_detect_list" value="{{index $v "default_detect_list"}}"></div>
     <div class="field"><label for="default_block_timeout">Entry timeout</label>
-      <input id="default_block_timeout" name="default_block_timeout" value="{{index $v "default_block_timeout"}}">
+      <input id="default_block_timeout" name="default_block_timeout" value="{{index $v "default_block_timeout"}}" placeholder="per-branch maximum">
       <p class="fine">RouterOS keeps entries with a timeout in RAM and never writes them to flash.
-        <strong>Both branches refuse a long timeout</strong>, and refuse the entry rather than
-        shortening it, so a router given too large a value holds nothing while still reporting a
-        clean rebuild. 4w worked on every router tested and 8w is the largest observed to work
-        anywhere. Run <span class="mono">apb-test</span> on a router to find its ceiling, then
-        regenerate its bundle: this value is written into the scripts.</p></div>
+        <strong>Leave this empty</strong> and each new device gets the longest value proven to work
+        on its branch: 4w for RouterOS 6, 8w for RouterOS 7. Both branches refuse a longer timeout,
+        and refuse the entry rather than shortening it, so a router given too large a value holds
+        nothing while still reporting a clean rebuild. An override here is applied only where the
+        branch is known to accept it. Run <span class="mono">apb-test</span> on a router to find its
+        own ceiling, then set it on the device and regenerate that bundle.</p></div>
     <div class="field"><label for="default_sync_interval">Sync interval <span class="opt">s</span></label>
       <input id="default_sync_interval" name="default_sync_interval" type="number" min="5" max="3600" value="{{index $v "default_sync_interval"}}"></div>
     <div class="field"><label for="default_report_interval">Report interval <span class="opt">s</span></label>

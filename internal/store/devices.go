@@ -301,15 +301,23 @@ func (db *DB) TokenByID(ctx context.Context, id int64) (model.DeviceToken, error
 	return t, err
 }
 
-// defaultBlockTimeout keeps a new device inside what RouterOS will accept on an
-// address-list entry. Both branches refuse a long timeout, and both refuse the
-// entry rather than clamping it, so a router given too large a value holds
-// nothing while reporting success. Four weeks works on every router tested.
+// defaultBlockTimeout gives a new device the longest entry timeout proven to
+// work on its RouterOS branch. Both branches refuse a long timeout, and both
+// refuse the entry rather than clamping it, so a router given too large a value
+// holds nothing while reporting success.
+//
+// The configured default is only used when it is not longer than the branch
+// allows: an operator who set a global default suited to RouterOS 7 must not
+// silently break every RouterOS 6 device they add afterwards.
 func defaultBlockTimeout(branch, configured string) string {
+	best := rsc.DefaultBlockTimeout(branch)
 	if configured == "" {
-		return rsc.DefaultBlockTimeout
+		return best
 	}
-	return configured
+	if rsc.TimeoutWithinBranch(branch, configured) {
+		return configured
+	}
+	return best
 }
 
 // defaultVerify picks a sensible TLS verification mode per RouterOS branch.

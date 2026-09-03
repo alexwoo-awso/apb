@@ -61,16 +61,22 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request, sc *sessionCt
 		return
 	}
 	series, _ := s.db.DeviceSeries(ctx, d.ID, intParam(r, "hours", 48, 6, 720))
+	// Beyond what the branch is proven to accept is not necessarily wrong: the
+	// operator may have measured further with apb-test. It is worth saying,
+	// because the failure is a router that stores nothing and reports success.
+	timeoutProven := rsc.TimeoutWithinBranch(d.ROSBranch, d.BlockTimeout)
 	recent, _ := s.db.Activity(ctx, d.ID, 25, 0)
 	cursor, _ := s.db.Cursor(ctx)
 	s.render(w, r, sc, "device.html", d.Name, "devices", map[string]any{
-		"D":       d,
-		"Tokens":  tokens,
-		"Series":  series,
-		"Recent":  recent,
-		"Cursor":  cursor,
-		"Lag":     cursor - d.Cursor,
-		"BaseURL": s.baseURL(r),
+		"D":             d,
+		"Tokens":        tokens,
+		"Series":        series,
+		"Recent":        recent,
+		"Cursor":        cursor,
+		"Lag":           cursor - d.Cursor,
+		"BaseURL":       s.baseURL(r),
+		"TimeoutProven": timeoutProven,
+		"TimeoutMax":    rsc.DefaultBlockTimeout(d.ROSBranch),
 	})
 }
 

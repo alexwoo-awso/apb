@@ -23,6 +23,7 @@
 :local Page 0
 :local NewCursor -1
 :local Total 0
+:local Recv 0
 :local Failed false
 :local Started false
 :do {
@@ -45,7 +46,7 @@
 :if ([:len $Tok] > 1) do={
 :local K [:pick $Tok 0 1]
 :local V [:pick $Tok 1 [:len $Tok]]
-:if ($K = "+") do={ {{template "bulkadd" .}} }
+:if ($K = "+") do={ :set Recv ($Recv + 1) ; {{template "bulkadd" .}} }
 :if ($K = "c") do={ :set NewCursor [:tonum $V] }
 :if ($K = "n") do={ :set Next [:tonum $V] }
 }
@@ -58,7 +59,7 @@
 :log error ("APB: rebuild failed on page " . $Page . ", the sync script will retry. Run " . "{{.Prefix}}test" . " to see why.")
 } else={
 :if ($NewCursor >= 0) do={ :set apbCursor $NewCursor ; {{template "savecursor" .}} }
-:log info ("APB: rebuild complete, " . $Total . " addresses, cursor now " . $apbCursor)
+:if (($Recv > 0) && ($Total = 0)) do={ :log error ("APB: the server sent " . $Recv . " addresses and this router stored none of them. It is refusing timeout={{.BlockTimeout}} on an address-list entry. Lower the entry timeout on the device page, regenerate the bundle and reinstall it; run {{.Prefix}}test to find the largest value this router accepts.") } else={ :log info ("APB: rebuild complete, " . $Total . " of " . $Recv . " addresses stored, cursor now " . $apbCursor) }
 }
 } on-error={ :log error "APB: rebuild script aborted" }
 :set apbBootLock

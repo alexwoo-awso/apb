@@ -85,11 +85,28 @@ type Params struct {
 // number in documentation, which is how the ten-year figure got in here.
 const timeoutCeiling = 8 * 7 * 24 * time.Hour
 
-// DefaultBlockTimeout is proven to work on every router tested. The length
-// barely matters in practice: the server notices when a list has drifted and
-// calls for a rebuild, so the timeout only governs how long a router cut off
-// from the server keeps protecting itself.
-const DefaultBlockTimeout = "4w"
+// Per-branch defaults, each the longest value proven to work on that branch.
+//
+// RouterOS 6 is only proven to 4w because the finer probes did not exist when
+// the 6.49 router was measured; it may well accept more, and apb-test will say
+// so. RouterOS 7 is proven to 8w. Neither accepts 52w.
+//
+// The length matters less than it looks: the server notices when a list has
+// drifted and calls for a rebuild, so the timeout only governs how long a
+// router cut off from the server keeps protecting itself.
+const (
+	DefaultBlockTimeoutV6 = "4w"
+	DefaultBlockTimeoutV7 = "8w"
+)
+
+// DefaultBlockTimeout returns the longest entry timeout proven to work on a
+// branch. An unknown branch gets the more conservative of the two.
+func DefaultBlockTimeout(branch string) string {
+	if branch == "v7" {
+		return DefaultBlockTimeoutV7
+	}
+	return DefaultBlockTimeoutV6
+}
 
 var (
 	reIdent   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,30}$`)
@@ -233,6 +250,22 @@ func parseROSDuration(s string) (time.Duration, error) {
 		return 0, fmt.Errorf("must be greater than zero")
 	}
 	return total, nil
+}
+
+// TimeoutWithinBranch reports whether a timeout is one this branch is known to
+// accept. It is deliberately conservative: a value that has not been observed
+// to work is treated as one that does not, because the failure mode is a router
+// that reports a clean rebuild and holds nothing.
+func TimeoutWithinBranch(branch, timeout string) bool {
+	d, err := parseROSDuration(timeout)
+	if err != nil {
+		return false
+	}
+	max, err := parseROSDuration(DefaultBlockTimeout(branch))
+	if err != nil {
+		return false
+	}
+	return d <= max
 }
 
 // Bundle is the set of files the console offers for download.

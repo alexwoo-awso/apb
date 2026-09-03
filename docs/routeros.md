@@ -53,9 +53,19 @@ Measured on real hardware:
 | 6.49.20 | ok | ok | | | | refused | refused |
 | 7.x | ok | ok | ok | ok | ok | refused | refused |
 
-The default is `4w`, which worked on everything tested, and the generator
-refuses more than `8w`. MikroTik documents a maximum of 4 294 967 295 seconds;
-that figure does not describe this field, since a 7.x router refuses 52w.
+Each device gets the longest value proven on its branch — `4w` on RouterOS 6,
+`8w` on RouterOS 7 — and the generator refuses more than `8w`. MikroTik
+documents a maximum of 4 294 967 295 seconds; that figure does not describe this
+field, since a 7.x router refuses 52w.
+
+If a router refuses the timeout it stores nothing at all, so `apb-sync` and
+`apb-bootstrap` compare what the server sent against what they managed to keep
+and log the mismatch with the value being refused:
+
+```
+APB: the server sent 412 addresses and this router stored none of them.
+It is refusing timeout=8w on an address-list entry.
+```
 
 Run `/system script run apb-test` to find your own build's ceiling: the write
 probes walk a ladder and the largest one reporting `OK` is what to set as the

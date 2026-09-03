@@ -1,5 +1,5 @@
 # APB scripts for "edge-1" (RouterOS v6)
-# Generated 2026-09-03 19:24:43Z by APB.
+# Generated 2026-09-03 23:39:42Z by APB.
 #
 # This file contains the API token for this router. Treat it as a password:
 # do not commit it, do not share it, and remove the file from the router once
@@ -30,10 +30,11 @@
 :set apbSrc ($apbSrc . ":local Res \"\"\r\n")
 :set apbSrc ($apbSrc . ":do { :set Res [/tool fetch url=(\$Url . \"/sync\?k=\" . \$UA . \"&c=\" . \$apbCursor . \"&n=\" . \$Held) http-method=get http-header-field=\$Hdr mode=https check-certifi")
 :set apbSrc ($apbSrc . "cate=no output=user as-value] } on-error={ :log warning (\"APB: sync could not reach \" . \$Url . \" - run apb-test for detail\") }\r\n")
-:set apbSrc ($apbSrc . ":if ([:typeof \$Res] = \"array\") do={\r\n:if ((\$Res->\"status\") = \"finished\") do={\r\n:local Next -1\r\n:local Resync false\r\n:local Added 0\r\n:local Removed 0\r\n")
-:set apbSrc ($apbSrc . ":foreach Tok in=[:toarray (\$Res->\"data\")] do={\r\n:if ([:len \$Tok] > 1) do={\r\n:local K [:pick \$Tok 0 1]\r\n:local V [:pick \$Tok 1 [:len \$Tok]]\r\n")
-:set apbSrc ($apbSrc . ":if (\$K = \"+\") do={ :if ([:len [/ip firewall address-list find list=\$List address=\$V]] = 0) do={ :do { /ip firewall address-list add list=\$List address=\$V timeout=")
-:set apbSrc ($apbSrc . "4w comment=\"apb\" ; :set Added (\$Added + 1) } on-error={} } }\r\n")
+:set apbSrc ($apbSrc . ":if ([:typeof \$Res] = \"array\") do={\r\n:if ((\$Res->\"status\") = \"finished\") do={\r\n:local Next -1\r\n:local Resync false\r\n:local Added 0\r\n:local Recv 0\r\n")
+:set apbSrc ($apbSrc . ":local Removed 0\r\n:foreach Tok in=[:toarray (\$Res->\"data\")] do={\r\n:if ([:len \$Tok] > 1) do={\r\n:local K [:pick \$Tok 0 1]\r\n")
+:set apbSrc ($apbSrc . ":local V [:pick \$Tok 1 [:len \$Tok]]\r\n")
+:set apbSrc ($apbSrc . ":if (\$K = \"+\") do={ :set Recv (\$Recv + 1) ; :if ([:len [/ip firewall address-list find list=\$List address=\$V]] = 0) do={ :do { /ip firewall address-list add list=\$")
+:set apbSrc ($apbSrc . "List address=\$V timeout=4w comment=\"apb\" ; :set Added (\$Added + 1) } on-error={} } }\r\n")
 :set apbSrc ($apbSrc . ":if (\$K = \"-\") do={ :do { /ip firewall address-list remove [find list=\$List address=\$V] ; :set Removed (\$Removed + 1) } on-error={} }\r\n")
 :set apbSrc ($apbSrc . ":if (\$K = \"c\") do={ :set Next [:tonum \$V] }\r\n:if (\$K = \"m\") do={ :set More true }\r\n:if (\$K = \"r\") do={ :set Resync true }\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . ":if (\$Resync) do={\r\n:log info \"APB: cursor too old, falling back to a full rebuild\"\r\n:set More false\r\n/system script run apb-bootstrap\r\n} else={\r\n")
@@ -41,6 +42,8 @@
 :set apbSrc ($apbSrc . " :do { /ip firewall address-list remove \$StIds } on-error={ :log warning \"APB: could not clear the previous cursor marker\" } } ; :do { /ip firewall address-list add li")
 :set apbSrc ($apbSrc . "st=\$State address=192.0.2.1 comment=(\"\" . \$apbCursor) timeout=4w } on-error={ :log warning (\"APB: could not record cursor \" . \$apbCursor . \" in \" . \$State . \" ")
 :set apbSrc ($apbSrc . "- the router refused the address-list write\") } } }\r\n")
+:set apbSrc ($apbSrc . ":if ((\$Recv > 0) && (\$Added = 0)) do={ :log error (\"APB: the server sent \" . \$Recv . \" addresses and this router stored none of them. It is refusing timeout=4w on a")
+:set apbSrc ($apbSrc . "n address-list entry. Lower the entry timeout on the device page, regenerate the bundle and reinstall it.\") }\r\n")
 :set apbSrc ($apbSrc . ":if ((\$Added + \$Removed) > 0) do={ :log info (\"APB: applied +\" . \$Added . \" -\" . \$Removed . \", cursor \" . \$apbCursor) }\r\n}\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . "} while=(\$More && (\$Loops < \$MaxLoops))\r\n}\r\n} on-error={ :log error \"APB: sync script aborted\" }\r\n:set apbLock\r\n}\r\n")
 :do { /system script remove [find name="apb-sync"] } on-error={ :log debug "APB: no previous apb-sync" }
@@ -55,22 +58,25 @@
 :set apbSrc ($apbSrc . ":local MaxPages 500\r\n:global apbCursor\r\n:global apbBootLock\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n")
 :set apbSrc ($apbSrc . ":local Now [/system resource get uptime]\r\n:local Run true\r\n")
 :set apbSrc ($apbSrc . ":if ([:typeof \$apbBootLock] = \"time\") do={ :if ((\$Now - \$apbBootLock) < 30m) do={ :set Run false } }\r\n:if (\$Run) do={\r\n:set apbBootLock \$Now\r\n:do {\r\n")
-:set apbSrc ($apbSrc . ":local Next 0\r\n:local Page 0\r\n:local NewCursor -1\r\n:local Total 0\r\n:local Failed false\r\n:local Started false\r\n:do {\r\n:set Page (\$Page + 1)\r\n")
-:set apbSrc ($apbSrc . ":local U (\$Url . \"/full\?k=\" . \$UA)\r\n:if (\$Next > 0) do={ :set U (\$U . \"&a=\" . \$Next) }\r\n:set Next 0\r\n:local Res \"\"\r\n")
+:set apbSrc ($apbSrc . ":local Next 0\r\n:local Page 0\r\n:local NewCursor -1\r\n:local Total 0\r\n:local Recv 0\r\n:local Failed false\r\n:local Started false\r\n:do {\r\n")
+:set apbSrc ($apbSrc . ":set Page (\$Page + 1)\r\n:local U (\$Url . \"/full\?k=\" . \$UA)\r\n:if (\$Next > 0) do={ :set U (\$U . \"&a=\" . \$Next) }\r\n:set Next 0\r\n:local Res \"\"\r\n")
 :set apbSrc ($apbSrc . ":do { :set Res [/tool fetch url=\$U http-method=get http-header-field=\$Hdr mode=https check-certificate=no output=user as-value] } on-error={ :set Failed true ; :log war")
 :set apbSrc ($apbSrc . "ning (\"APB: rebuild could not reach \" . \$U . \" - check DNS, routing and the certificate setting\") }\r\n:if (!\$Failed) do={\r\n")
 :set apbSrc ($apbSrc . ":if ([:typeof \$Res] = \"array\") do={\r\n:if ((\$Res->\"status\") = \"finished\") do={\r\n:if (!\$Started) do={\r\n:set Started true\r\n:set apbCursor\r\n")
 :set apbSrc ($apbSrc . ":do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n/ip firewall address-list remove [find list=\$List]\r\n}\r\n")
 :set apbSrc ($apbSrc . ":foreach Tok in=[:toarray (\$Res->\"data\")] do={\r\n:if ([:len \$Tok] > 1) do={\r\n:local K [:pick \$Tok 0 1]\r\n:local V [:pick \$Tok 1 [:len \$Tok]]\r\n")
-:set apbSrc ($apbSrc . ":if (\$K = \"+\") do={ :do { /ip firewall address-list add list=\$List address=\$V timeout=4w comment=\"apb\" ; :set Total (\$Total + 1) } on-error={} }\r\n")
-:set apbSrc ($apbSrc . ":if (\$K = \"c\") do={ :set NewCursor [:tonum \$V] }\r\n:if (\$K = \"n\") do={ :set Next [:tonum \$V] }\r\n}\r\n}\r\n")
+:set apbSrc ($apbSrc . ":if (\$K = \"+\") do={ :set Recv (\$Recv + 1) ; :do { /ip firewall address-list add list=\$List address=\$V timeout=4w comment=\"apb\" ; :set Total (\$Total + 1) } on-err")
+:set apbSrc ($apbSrc . "or={} }\r\n:if (\$K = \"c\") do={ :set NewCursor [:tonum \$V] }\r\n:if (\$K = \"n\") do={ :set Next [:tonum \$V] }\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . "} else={ :set Failed true ; :log warning (\"APB: rebuild got fetch status \" . (\$Res->\"status\")) }\r\n")
 :set apbSrc ($apbSrc . "} else={ :set Failed true ; :log warning \"APB: rebuild got no reply from the server\" }\r\n}\r\n} while=((!\$Failed) && (\$Next > 0) && (\$Page < \$MaxPages))\r\n")
 :set apbSrc ($apbSrc . ":if (\$Failed) do={\r\n:log error (\"APB: rebuild failed on page \" . \$Page . \", the sync script will retry. Run \" . \"apb-test\" . \" to see why.\")\r\n} else={\r\n")
 :set apbSrc ($apbSrc . ":if (\$NewCursor >= 0) do={ :set apbCursor \$NewCursor ; :local StIds [/ip firewall address-list find list=\$State] ; :if ([:len \$StIds] > 0) do={ :do { /ip firewall add")
 :set apbSrc ($apbSrc . "ress-list remove \$StIds } on-error={ :log warning \"APB: could not clear the previous cursor marker\" } } ; :do { /ip firewall address-list add list=\$State address=192.")
 :set apbSrc ($apbSrc . "0.2.1 comment=(\"\" . \$apbCursor) timeout=4w } on-error={ :log warning (\"APB: could not record cursor \" . \$apbCursor . \" in \" . \$State . \" - the router refused th")
-:set apbSrc ($apbSrc . "e address-list write\") } }\r\n:log info (\"APB: rebuild complete, \" . \$Total . \" addresses, cursor now \" . \$apbCursor)\r\n}\r\n")
+:set apbSrc ($apbSrc . "e address-list write\") } }\r\n")
+:set apbSrc ($apbSrc . ":if ((\$Recv > 0) && (\$Total = 0)) do={ :log error (\"APB: the server sent \" . \$Recv . \" addresses and this router stored none of them. It is refusing timeout=4w on a")
+:set apbSrc ($apbSrc . "n address-list entry. Lower the entry timeout on the device page, regenerate the bundle and reinstall it; run apb-test to find the largest value this router accepts.\") }")
+:set apbSrc ($apbSrc . " else={ :log info (\"APB: rebuild complete, \" . \$Total . \" of \" . \$Recv . \" addresses stored, cursor now \" . \$apbCursor) }\r\n}\r\n")
 :set apbSrc ($apbSrc . "} on-error={ :log error \"APB: rebuild script aborted\" }\r\n:set apbBootLock\r\n}\r\n")
 :do { /system script remove [find name="apb-bootstrap"] } on-error={ :log debug "APB: no previous apb-bootstrap" }
 /system script add name="apb-bootstrap" policy=read,write,test dont-require-permissions=no comment="APB: rebuilds the whole list after a reboot" source=$apbSrc

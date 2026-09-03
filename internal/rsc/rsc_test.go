@@ -476,8 +476,14 @@ func TestCursorIsPersistedOutsideTheGlobal(t *testing.T) {
 	// The rebuild must report what it actually stored, not what it received:
 	// logging the received value is why a cursor that never persisted looked
 	// like a success for four releases.
-	if !strings.Contains(boot, `"APB: rebuild complete, " . $Total . " addresses, cursor now " . $apbCursor`) {
+	if !strings.Contains(boot, `cursor now " . $apbCursor`) {
 		t.Error("the rebuild does not report the cursor it stored")
+	}
+	// It must also report how many of the addresses it was sent it actually
+	// kept. A router that refuses the timeout stores none of them and otherwise
+	// looks identical to a clean rebuild.
+	if !strings.Contains(boot, `$Total . " of " . $Recv`) {
+		t.Error("the rebuild does not report stored against received")
 	}
 	if strings.Contains(b.Install, "cursor "+`" . $NewCursor`) {
 		t.Error("the rebuild still reports the received cursor rather than the stored one")
@@ -560,6 +566,53 @@ func TestParseROSDuration(t *testing.T) {
 	for _, bad := range []string{"", "4", "w", "4x", "abc", "0s"} {
 		if _, err := parseROSDuration(bad); err == nil {
 			t.Errorf("%q was accepted", bad)
+		}
+	}
+}
+
+// A router that refuses the entry timeout receives addresses and stores none,
+// while every other signal — the fetch, the cursor, the rebuild message — looks
+// exactly like success. That combination hid the defect for nine releases, so
+// both scripts now check for it explicitly.
+func TestScriptsReportWhenNothingWasStored(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	for _, name := range []string{"sync.rsc.tmpl", "bootstrap.rsc.tmpl"} {
+		body, err := render(name, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(body, "stored none of them") {
+			t.Errorf("%s does not notice receiving addresses and storing none", name)
+		}
+		if !strings.Contains(body, "timeout="+p.BlockTimeout) {
+			t.Errorf("%s does not name the timeout being refused", name)
+		}
+	}
+}
+
+// The default entry timeout is the longest value proven to work on that branch,
+// not a single conservative figure for both.
+func TestDefaultTimeoutIsThePerBranchMaximum(t *testing.T) {
+	if DefaultBlockTimeout("v6") != "4w" {
+		t.Errorf("v6 default is %q", DefaultBlockTimeout("v6"))
+	}
+	if DefaultBlockTimeout("v7") != "8w" {
+		t.Errorf("v7 default is %q", DefaultBlockTimeout("v7"))
+	}
+	// An unknown branch takes the safer of the two.
+	if DefaultBlockTimeout("") != "4w" {
+		t.Errorf("unknown branch default is %q", DefaultBlockTimeout(""))
+	}
+	for _, tc := range []struct {
+		branch, timeout string
+		within          bool
+	}{
+		{"v6", "4w", true}, {"v6", "1d", true}, {"v6", "8w", false}, {"v6", "520w", false},
+		{"v7", "8w", true}, {"v7", "4w", true}, {"v7", "12w", false},
+		{"v7", "nonsense", false},
+	} {
+		if got := TimeoutWithinBranch(tc.branch, tc.timeout); got != tc.within {
+			t.Errorf("%s %s: within=%v, want %v", tc.branch, tc.timeout, got, tc.within)
 		}
 	}
 }

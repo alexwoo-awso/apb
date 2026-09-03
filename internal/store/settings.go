@@ -19,7 +19,7 @@ type Settings struct {
 	AutoBlockDevices int `key:"auto_block_devices" label:"Distinct routers before broadcast" help:"How many different routers must have reported an address before it is pushed. Raise this to require corroboration."`
 	DefaultTTLDays   int `key:"default_ttl_days" label:"Server-side block lifetime (days)" help:"An address not seen again for this long is released and removed from every router. 0 keeps entries forever."`
 
-	DefaultBlockTimeout   string `key:"default_block_timeout" label:"RouterOS entry timeout" help:"Timeout written into each address-list entry, which is what keeps it in RAM instead of flash. RouterOS refuses a long value and then holds nothing, so this stays short: 4w works everywhere tested, 8w is the largest observed to work anywhere."`
+	DefaultBlockTimeout   string `key:"default_block_timeout" label:"RouterOS entry timeout" help:"Leave empty and each new device gets the longest timeout proven to work on its RouterOS branch: 4w for 6.x, 8w for 7.x. Set a value to override, and it is used only where the branch is known to accept it. RouterOS refuses a long timeout and then holds nothing at all, so this cannot simply be raised."`
 	DefaultSyncInterval   int    `key:"default_sync_interval" label:"Default sync interval (s)" help:"How often a new router polls for changes. Lower is closer to real time; 15s is a good balance."`
 	DefaultReportInterval int    `key:"default_report_interval" label:"Default report interval (s)" help:"How often a new router uploads its own detections."`
 	DefaultListName       string `key:"default_list_name" label:"Default address-list name" help:"Name of the RouterOS address list that receives blocked addresses."`
@@ -52,7 +52,7 @@ func DefaultSettings() Settings {
 		AutoBlockReports:      1,
 		AutoBlockDevices:      1,
 		DefaultTTLDays:        0,
-		DefaultBlockTimeout:   "4w",
+		DefaultBlockTimeout:   "",
 		DefaultSyncInterval:   15,
 		DefaultReportInterval: 300,
 		DefaultListName:       "APB",
