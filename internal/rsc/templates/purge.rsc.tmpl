@@ -3,12 +3,14 @@
 # the next sync rebuilds from scratch. The scripts and schedules stay in place.
 :local List "{{.ListName}}"
 :local Sent "{{.SentList}}"
+:local State "{{.ListName}}_state"
 :global apbCursor
 :global apbLock
 :global apbBootLock
 :global apbReportLock
 {{template "flush" .}}
 /ip firewall address-list remove [find list=$Sent]
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
 :set apbCursor
 :set apbLock
 :set apbBootLock

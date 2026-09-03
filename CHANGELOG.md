@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.0.6 — 2026-09-03
+
+### Fixed
+
+- **The replication cursor did not survive between scheduler runs.** It lived
+  only in a RouterOS `:global`, and on a real 6.49 router that global was gone
+  by the next invocation fifteen seconds later. Every poll therefore saw no
+  cursor, ran a full rebuild, and never reached the incremental sync at all.
+  The cursor is now also written to an address-list marker, which is ordinary
+  router state and persists exactly as the blocklist does. It carries a timeout,
+  so like everything else this project installs it lives in RAM and disappears
+  on reboot, which is precisely when the cursor should be lost.
+- **The rebuild reported success it had not verified.** It logged the cursor the
+  server sent rather than the one the router stored, so a cursor that never
+  persisted looked identical to one that did. It now reports what it holds.
+- **A device rebuilding its list showed as "never synced".** Liveness was
+  recorded only on `/sync`, so a router calling `/full` every fifteen seconds
+  filled the server log while the console insisted it had never been in touch.
+  Any authenticated request now counts as contact.
+
 ## 2.0.5 — 2026-09-03
 
 ### Fixed

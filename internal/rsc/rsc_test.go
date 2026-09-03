@@ -419,3 +419,66 @@ func TestReportMetadataHeadersAreV7Only(t *testing.T) {
 		}
 	}
 }
+
+// The cursor must survive between scheduler runs. It was held only in a
+// RouterOS :global, and on a real 6.49 router that global did not survive from
+// one invocation to the next: every poll saw no cursor, ran a full rebuild, and
+// never reached the incremental sync at all. The cursor is now also written to
+// an address-list marker, which is ordinary router state and persists exactly
+// as the blocklist does.
+func TestCursorIsPersistedOutsideTheGlobal(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	b, err := Generate(p)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	sync, err := render("sync.rsc.tmpl", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boot, err := render("bootstrap.rsc.tmpl", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	purge, err := render("purge.rsc.tmpl", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Sync recovers a cursor it does not hold before deciding to rebuild.
+	load := strings.Index(sync, "address-list find list=$State")
+	decide := strings.Index(sync, `:log info "APB: no cursor held`)
+	if load < 0 || decide < 0 {
+		t.Fatal("sync does not both recover and check the cursor")
+	}
+	if load > decide {
+		t.Error("sync decides to rebuild before trying to recover the cursor")
+	}
+
+	// Both writers store it, and the marker must carry a timeout or it would be
+	// written to the router's flash, which is the thing this project exists to
+	// avoid.
+	for name, body := range map[string]string{"sync": sync, "bootstrap": boot} {
+		i := strings.Index(body, "address-list add list=$State")
+		if i < 0 {
+			t.Errorf("%s never records the cursor", name)
+			continue
+		}
+		if !strings.Contains(body[i:i+160], "timeout=$Timeout") {
+			t.Errorf("%s writes the cursor marker without a timeout, which puts it on flash", name)
+		}
+	}
+
+	if !strings.Contains(purge, "list=$State") {
+		t.Error("purge leaves the cursor marker behind")
+	}
+	// The rebuild must report what it actually stored, not what it received:
+	// logging the received value is why a cursor that never persisted looked
+	// like a success for four releases.
+	if !strings.Contains(boot, `"APB: rebuild complete, " . $Total . " addresses, cursor now " . $apbCursor`) {
+		t.Error("the rebuild does not report the cursor it stored")
+	}
+	if strings.Contains(b.Install, "cursor "+`" . $NewCursor`) {
+		t.Error("the rebuild still reports the received cursor rather than the stored one")
+	}
+}

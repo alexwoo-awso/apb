@@ -344,6 +344,11 @@ func (a *API) handleFull(w http.ResponseWriter, r *http.Request, d model.Device)
 		}
 		a.log.Info("device bootstrap started", "device", d.Name, "cursor", cursor)
 	}
+	// Any request is proof the router is alive, and a device stuck rebuilding
+	// would otherwise read as never having synced while its calls fill the log.
+	if err := a.db.RecordSeen(r.Context(), d.ID, httpx.ClientIP(r), now); err != nil {
+		a.log.Warn("record contact", "device", d.Name, "err", err)
+	}
 	if !d.Consume {
 		io.WriteString(w, strings.Join(tokens, ","))
 		return
@@ -375,6 +380,9 @@ func (a *API) handleFull(w http.ResponseWriter, r *http.Request, d model.Device)
 //	12 blocked count
 func (a *API) handleWhoami(w http.ResponseWriter, r *http.Request, d model.Device) {
 	a.noteIdentity(r, d, r.URL.Query())
+	if err := a.db.RecordSeen(r.Context(), d.ID, httpx.ClientIP(r), time.Now().Unix()); err != nil {
+		a.log.Warn("record contact", "device", d.Name, "err", err)
+	}
 	cursor, _ := a.db.Cursor(r.Context())
 	blocked, _ := a.db.BlockedCount(r.Context(), d.IPv6)
 	fmt.Fprintf(w, "1,%s,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d",

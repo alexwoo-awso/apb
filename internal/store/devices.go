@@ -214,6 +214,16 @@ func (db *DB) RecordSync(ctx context.Context, deviceID, cursor, applied int64, i
 	return err
 }
 
+// RecordSeen notes that a router made contact without claiming a cursor. A
+// device rebuilding its list talks to the server every poll, and reporting it
+// as never having synced while its requests are in the log is simply wrong.
+func (db *DB) RecordSeen(ctx context.Context, deviceID int64, ip string, now int64) error {
+	_, err := db.rw.ExecContext(ctx,
+		`UPDATE devices SET last_sync_at = ?, last_ip = CASE WHEN ? <> '' THEN ? ELSE last_ip END
+		 WHERE id = ?`, now, ip, ip, deviceID)
+	return err
+}
+
 // RecordIdentity stores what the router told us about itself.
 func (db *DB) RecordIdentity(ctx context.Context, deviceID int64, identity, rosVersion, boardModel, ip string) error {
 	_, err := db.rw.ExecContext(ctx,

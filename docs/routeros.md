@@ -47,10 +47,16 @@ correctly — staying under keeps the list readable.
 
 ## How the router keeps its place
 
-The replication cursor lives in a `:global` (`apbCursor`), which is RAM only.
-The list and the cursor are therefore lost together on a reboot, which is
-exactly what you want: if the cursor survived an empty list, the router would
-believe it was up to date while protecting nothing.
+The replication cursor is held in two places, both RAM only: a `:global`
+(`apbCursor`) as the fast path, and an address-list marker in
+`<blocklist>_state` carrying a timeout, which is what actually survives between
+scheduler runs. A RouterOS global did not persist from one scheduled invocation
+to the next on the 6.49 router this was first deployed to, so the marker is the
+authoritative copy and the global is only a cache.
+
+The list and the cursor are lost together on a reboot, which is exactly what you
+want: if the cursor survived an empty list, the router would believe it was up
+to date while protecting nothing.
 
 `apb-sync` checks for the cursor first. No cursor means no list, so it hands
 over to `apb-bootstrap`.

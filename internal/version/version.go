@@ -5,7 +5,7 @@ import "runtime/debug"
 
 var (
 	// Version is the release tag, e.g. "2.0.0".
-	Version = "2.0.5"
+	Version = "2.0.6"
 	// Commit is the git revision the binary was built from.
 	Commit = ""
 	// Date is the build timestamp in RFC3339.

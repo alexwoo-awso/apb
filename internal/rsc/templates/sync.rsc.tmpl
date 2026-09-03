@@ -5,6 +5,7 @@
 :local Url "{{.BaseURL}}/api/v1"
 :local Token "{{.Token}}"
 :local List "{{.ListName}}"
+:local State "{{.ListName}}_state"
 :local UA "{{.UserAgent}}"
 :local Timeout {{.BlockTimeout}}
 :local MaxLoops {{.MaxLoops}}
@@ -17,8 +18,9 @@
 :if ($Run) do={
 :set apbLock $Now
 :do {
+{{template "loadcursor" .}}
 :if ([:typeof $apbCursor] != "num") do={
-:log info "APB: no cursor in memory, rebuilding the list"
+:log info "APB: no cursor held on this router, rebuilding the list"
 /system script run {{.Prefix}}bootstrap
 } else={
 :local More true
@@ -51,7 +53,7 @@
 :set More false
 /system script run {{.Prefix}}bootstrap
 } else={
-:if ($Next >= 0) do={ :set apbCursor $Next }
+:if ($Next >= 0) do={ :if ($Next != $apbCursor) do={ :set apbCursor $Next ; {{template "savecursor" .}} } }
 :if (($Added + $Removed) > 0) do={ :log info ("APB: applied +" . $Added . " -" . $Removed . ", cursor " . $apbCursor) }
 }
 }

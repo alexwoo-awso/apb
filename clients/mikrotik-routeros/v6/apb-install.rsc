@@ -1,5 +1,5 @@
 # APB scripts for "edge-1" (RouterOS v6)
-# Generated 2026-09-03 18:05:00Z by APB.
+# Generated 2026-09-03 18:26:17Z by APB.
 #
 # This file contains the API token for this router. Treat it as a password:
 # do not commit it, do not share it, and remove the file from the router once
@@ -20,10 +20,13 @@
 :set apbSrc ""
 :set apbSrc ($apbSrc . "# APB incremental sync for edge-1.\r\n# Applies the changes the server has queued since the cursor held in RAM.\r\n")
 :set apbSrc ($apbSrc . "# Entries are added with a timeout so RouterOS keeps them in memory and never\r\n# writes them to flash.\r\n:local Url \"https://apb.example.org/api/v1\"\r\n")
-:set apbSrc ($apbSrc . ":local Token \"apb_SAMPLETOKENONLY000000\"\r\n:local List \"APB\"\r\n:local UA \"apb-router\"\r\n:local Timeout 520w\r\n:local MaxLoops 20\r\n:global apbCursor\r\n")
-:set apbSrc ($apbSrc . ":global apbLock\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n:local Now [/system resource get uptime]\r\n:local Run true\r\n")
-:set apbSrc ($apbSrc . ":if ([:typeof \$apbLock] = \"time\") do={ :if ((\$Now - \$apbLock) < 3m) do={ :set Run false } }\r\n:if (\$Run) do={\r\n:set apbLock \$Now\r\n:do {\r\n")
-:set apbSrc ($apbSrc . ":if ([:typeof \$apbCursor] != \"num\") do={\r\n:log info \"APB: no cursor in memory, rebuilding the list\"\r\n/system script run apb-bootstrap\r\n} else={\r\n")
+:set apbSrc ($apbSrc . ":local Token \"apb_SAMPLETOKENONLY000000\"\r\n:local List \"APB\"\r\n:local State \"APB_state\"\r\n:local UA \"apb-router\"\r\n:local Timeout 520w\r\n")
+:set apbSrc ($apbSrc . ":local MaxLoops 20\r\n:global apbCursor\r\n:global apbLock\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n")
+:set apbSrc ($apbSrc . ":local Now [/system resource get uptime]\r\n:local Run true\r\n:if ([:typeof \$apbLock] = \"time\") do={ :if ((\$Now - \$apbLock) < 3m) do={ :set Run false } }\r\n")
+:set apbSrc ($apbSrc . ":if (\$Run) do={\r\n:set apbLock \$Now\r\n:do {\r\n")
+:set apbSrc ($apbSrc . ":if ([:typeof \$apbCursor] != \"num\") do={ :local Saved [/ip firewall address-list find list=\$State] ; :if ([:len \$Saved] > 0) do={ :do { :set apbCursor [:tonum [/ip f")
+:set apbSrc ($apbSrc . "irewall address-list get [:pick \$Saved 0] comment]] ; :log info (\"APB: recovered cursor \" . \$apbCursor . \" from \" . \$State) } on-error={} } }\r\n")
+:set apbSrc ($apbSrc . ":if ([:typeof \$apbCursor] != \"num\") do={\r\n:log info \"APB: no cursor held on this router, rebuilding the list\"\r\n/system script run apb-bootstrap\r\n} else={\r\n")
 :set apbSrc ($apbSrc . ":local More true\r\n:local Loops 0\r\n:do {\r\n:set More false\r\n:set Loops (\$Loops + 1)\r\n:local Held [:len [/ip firewall address-list find list=\$List]]\r\n")
 :set apbSrc ($apbSrc . ":local Res \"\"\r\n")
 :set apbSrc ($apbSrc . ":do { :set Res [/tool fetch url=(\$Url . \"/sync\?k=\" . \$UA . \"&c=\" . \$apbCursor . \"&n=\" . \$Held) http-method=get http-header-field=\$Hdr mode=https check-certifi")
@@ -35,7 +38,8 @@
 :set apbSrc ($apbSrc . ":if (\$K = \"-\") do={ :do { /ip firewall address-list remove [find list=\$List address=\$V] ; :set Removed (\$Removed + 1) } on-error={} }\r\n")
 :set apbSrc ($apbSrc . ":if (\$K = \"c\") do={ :set Next [:tonum \$V] }\r\n:if (\$K = \"m\") do={ :set More true }\r\n:if (\$K = \"r\") do={ :set Resync true }\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . ":if (\$Resync) do={\r\n:log info \"APB: cursor too old, falling back to a full rebuild\"\r\n:set More false\r\n/system script run apb-bootstrap\r\n} else={\r\n")
-:set apbSrc ($apbSrc . ":if (\$Next >= 0) do={ :set apbCursor \$Next }\r\n")
+:set apbSrc ($apbSrc . ":if (\$Next >= 0) do={ :if (\$Next != \$apbCursor) do={ :set apbCursor \$Next ; :do { /ip firewall address-list remove [find list=\$State] ; /ip firewall address-list add")
+:set apbSrc ($apbSrc . " list=\$State address=0.0.0.1 comment=(\"\" . \$apbCursor) timeout=\$Timeout } on-error={ :log warning \"APB: could not record the cursor\" } } }\r\n")
 :set apbSrc ($apbSrc . ":if ((\$Added + \$Removed) > 0) do={ :log info (\"APB: applied +\" . \$Added . \" -\" . \$Removed . \", cursor \" . \$apbCursor) }\r\n}\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . "} while=(\$More && (\$Loops < \$MaxLoops))\r\n}\r\n} on-error={ :log error \"APB: sync script aborted\" }\r\n:set apbLock\r\n}\r\n")
 :do { /system script remove [find name="apb-sync"] } on-error={ :log debug "APB: no previous apb-sync" }
@@ -46,23 +50,26 @@
 :set apbSrc ($apbSrc . "# APB full rebuild for edge-1.\r\n# The blocklist lives in RAM, so it is empty after a reboot. This script pulls\r\n")
 :set apbSrc ($apbSrc . "# the whole list back in pages small enough for the fetch buffer and stores the\r\n# server cursor so the incremental sync can take over.\r\n")
 :set apbSrc ($apbSrc . "# It also runs when the server reports that the cursor is too old to catch up.\r\n:local Url \"https://apb.example.org/api/v1\"\r\n")
-:set apbSrc ($apbSrc . ":local Token \"apb_SAMPLETOKENONLY000000\"\r\n:local List \"APB\"\r\n:local UA \"apb-router\"\r\n:local Timeout 520w\r\n:local MaxPages 500\r\n:global apbCursor\r\n")
-:set apbSrc ($apbSrc . ":global apbBootLock\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n:local Now [/system resource get uptime]\r\n:local Run true\r\n")
+:set apbSrc ($apbSrc . ":local Token \"apb_SAMPLETOKENONLY000000\"\r\n:local List \"APB\"\r\n:local State \"APB_state\"\r\n:local UA \"apb-router\"\r\n:local Timeout 520w\r\n")
+:set apbSrc ($apbSrc . ":local MaxPages 500\r\n:global apbCursor\r\n:global apbBootLock\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n")
+:set apbSrc ($apbSrc . ":local Now [/system resource get uptime]\r\n:local Run true\r\n")
 :set apbSrc ($apbSrc . ":if ([:typeof \$apbBootLock] = \"time\") do={ :if ((\$Now - \$apbBootLock) < 30m) do={ :set Run false } }\r\n:if (\$Run) do={\r\n:set apbBootLock \$Now\r\n:do {\r\n")
 :set apbSrc ($apbSrc . ":local Next 0\r\n:local Page 0\r\n:local NewCursor -1\r\n:local Total 0\r\n:local Failed false\r\n:local Started false\r\n:do {\r\n:set Page (\$Page + 1)\r\n")
 :set apbSrc ($apbSrc . ":local U (\$Url . \"/full\?k=\" . \$UA)\r\n:if (\$Next > 0) do={ :set U (\$U . \"&a=\" . \$Next) }\r\n:set Next 0\r\n:local Res \"\"\r\n")
 :set apbSrc ($apbSrc . ":do { :set Res [/tool fetch url=\$U http-method=get http-header-field=\$Hdr mode=https check-certificate=no output=user as-value] } on-error={ :set Failed true ; :log war")
 :set apbSrc ($apbSrc . "ning (\"APB: rebuild could not reach \" . \$U . \" - check DNS, routing and the certificate setting\") }\r\n:if (!\$Failed) do={\r\n")
 :set apbSrc ($apbSrc . ":if ([:typeof \$Res] = \"array\") do={\r\n:if ((\$Res->\"status\") = \"finished\") do={\r\n:if (!\$Started) do={\r\n:set Started true\r\n:set apbCursor\r\n")
-:set apbSrc ($apbSrc . "/ip firewall address-list remove [find list=\$List]\r\n}\r\n:foreach Tok in=[:toarray (\$Res->\"data\")] do={\r\n:if ([:len \$Tok] > 1) do={\r\n")
-:set apbSrc ($apbSrc . ":local K [:pick \$Tok 0 1]\r\n:local V [:pick \$Tok 1 [:len \$Tok]]\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n/ip firewall address-list remove [find list=\$List]\r\n}\r\n")
+:set apbSrc ($apbSrc . ":foreach Tok in=[:toarray (\$Res->\"data\")] do={\r\n:if ([:len \$Tok] > 1) do={\r\n:local K [:pick \$Tok 0 1]\r\n:local V [:pick \$Tok 1 [:len \$Tok]]\r\n")
 :set apbSrc ($apbSrc . ":if (\$K = \"+\") do={ :do { /ip firewall address-list add list=\$List address=\$V timeout=\$Timeout comment=\"apb\" ; :set Total (\$Total + 1) } on-error={} }\r\n")
 :set apbSrc ($apbSrc . ":if (\$K = \"c\") do={ :set NewCursor [:tonum \$V] }\r\n:if (\$K = \"n\") do={ :set Next [:tonum \$V] }\r\n}\r\n}\r\n")
 :set apbSrc ($apbSrc . "} else={ :set Failed true ; :log warning (\"APB: rebuild got fetch status \" . (\$Res->\"status\")) }\r\n")
 :set apbSrc ($apbSrc . "} else={ :set Failed true ; :log warning \"APB: rebuild got no reply from the server\" }\r\n}\r\n} while=((!\$Failed) && (\$Next > 0) && (\$Page < \$MaxPages))\r\n")
 :set apbSrc ($apbSrc . ":if (\$Failed) do={\r\n:log error (\"APB: rebuild failed on page \" . \$Page . \", the sync script will retry. Run \" . \"apb-test\" . \" to see why.\")\r\n} else={\r\n")
-:set apbSrc ($apbSrc . ":if (\$NewCursor >= 0) do={ :set apbCursor \$NewCursor }\r\n:log info (\"APB: rebuild complete, \" . \$Total . \" addresses, cursor \" . \$NewCursor)\r\n}\r\n")
-:set apbSrc ($apbSrc . "} on-error={ :log error \"APB: rebuild script aborted\" }\r\n:set apbBootLock\r\n}\r\n")
+:set apbSrc ($apbSrc . ":if (\$NewCursor >= 0) do={ :set apbCursor \$NewCursor ; :do { /ip firewall address-list remove [find list=\$State] ; /ip firewall address-list add list=\$State address=0")
+:set apbSrc ($apbSrc . ".0.0.1 comment=(\"\" . \$apbCursor) timeout=\$Timeout } on-error={ :log warning \"APB: could not record the cursor\" } }\r\n")
+:set apbSrc ($apbSrc . ":log info (\"APB: rebuild complete, \" . \$Total . \" addresses, cursor now \" . \$apbCursor)\r\n}\r\n} on-error={ :log error \"APB: rebuild script aborted\" }\r\n")
+:set apbSrc ($apbSrc . ":set apbBootLock\r\n}\r\n")
 :do { /system script remove [find name="apb-bootstrap"] } on-error={ :log debug "APB: no previous apb-bootstrap" }
 /system script add name="apb-bootstrap" policy=read,write,test dont-require-permissions=no comment="APB: rebuilds the whole list after a reboot" source=$apbSrc
 
@@ -91,9 +98,10 @@
 # --- apb-purge: clears every address APB manages here
 :set apbSrc ""
 :set apbSrc ($apbSrc . "# APB purge for edge-1.\r\n# Clears every address APB manages on this router and forgets the cursor, so\r\n")
-:set apbSrc ($apbSrc . "# the next sync rebuilds from scratch. The scripts and schedules stay in place.\r\n:local List \"APB\"\r\n:local Sent \"APB_detect_sent\"\r\n:global apbCursor\r\n")
-:set apbSrc ($apbSrc . ":global apbLock\r\n:global apbBootLock\r\n:global apbReportLock\r\n/ip firewall address-list remove [find list=\$List]\r\n")
-:set apbSrc ($apbSrc . "/ip firewall address-list remove [find list=\$Sent]\r\n:set apbCursor\r\n:set apbLock\r\n:set apbBootLock\r\n:set apbReportLock\r\n")
+:set apbSrc ($apbSrc . "# the next sync rebuilds from scratch. The scripts and schedules stay in place.\r\n:local List \"APB\"\r\n:local Sent \"APB_detect_sent\"\r\n")
+:set apbSrc ($apbSrc . ":local State \"APB_state\"\r\n:global apbCursor\r\n:global apbLock\r\n:global apbBootLock\r\n:global apbReportLock\r\n")
+:set apbSrc ($apbSrc . "/ip firewall address-list remove [find list=\$List]\r\n/ip firewall address-list remove [find list=\$Sent]\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n:set apbCursor\r\n:set apbLock\r\n:set apbBootLock\r\n:set apbReportLock\r\n")
 :set apbSrc ($apbSrc . ":log info \"APB: local state cleared\"\r\n")
 :do { /system script remove [find name="apb-purge"] } on-error={ :log debug "APB: no previous apb-purge" }
 /system script add name="apb-purge" policy=read,write,test dont-require-permissions=no comment="APB: clears every address APB manages here" source=$apbSrc

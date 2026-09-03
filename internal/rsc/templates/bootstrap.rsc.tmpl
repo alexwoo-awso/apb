@@ -6,6 +6,7 @@
 :local Url "{{.BaseURL}}/api/v1"
 :local Token "{{.Token}}"
 :local List "{{.ListName}}"
+:local State "{{.ListName}}_state"
 :local UA "{{.UserAgent}}"
 :local Timeout {{.BlockTimeout}}
 :local MaxPages {{.MaxPages}}
@@ -37,6 +38,7 @@
 :if (!$Started) do={
 :set Started true
 :set apbCursor
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
 {{template "flush" .}}
 }
 :foreach Tok in=[:toarray ($Res->"data")] do={
@@ -55,8 +57,8 @@
 :if ($Failed) do={
 :log error ("APB: rebuild failed on page " . $Page . ", the sync script will retry. Run " . "{{.Prefix}}test" . " to see why.")
 } else={
-:if ($NewCursor >= 0) do={ :set apbCursor $NewCursor }
-:log info ("APB: rebuild complete, " . $Total . " addresses, cursor " . $NewCursor)
+:if ($NewCursor >= 0) do={ :set apbCursor $NewCursor ; {{template "savecursor" .}} }
+:log info ("APB: rebuild complete, " . $Total . " addresses, cursor now " . $apbCursor)
 }
 } on-error={ :log error "APB: rebuild script aborted" }
 :set apbBootLock
