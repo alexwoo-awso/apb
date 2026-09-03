@@ -10,7 +10,7 @@
 :local SentTimeout {{.SentTimeout}}
 :local MaxBatch {{.MaxBatch}}
 :global apbReportLock
-:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Hdr ("Authorization: Bearer " . $Token . ",user-agent: " . $UA . ",X-Apb-Agent: " . $UA)
 :local Now [/system resource get uptime]
 :local Run true
 :if ([:typeof $apbReportLock] = "time") do={ :if (($Now - $apbReportLock) < 10m) do={ :set Run false } }

@@ -76,14 +76,17 @@
         raising it risks silent truncation on the router.</p></div>
     <div class="field"><label for="max_report_size">Max report upload <span class="opt">bytes</span></label>
       <input id="max_report_size" name="max_report_size" type="number" min="1024" max="8388608" value="{{index $v "max_report_size"}}"></div>
-    <div class="field grow"><label for="require_user_agent">Required client User-Agent</label>
+    <div class="field grow"><label for="require_user_agent">Required client identity</label>
       <input id="require_user_agent" name="require_user_agent" value="{{index $v "require_user_agent"}}" placeholder="leave empty to disable">
-      <p class="fine"><strong>Changing this stops every router that is already deployed.</strong>
-        The value is baked into a bundle when it is generated, so after changing it you must
-        regenerate and reinstall every bundle. Until you do, those routers are rejected with the
-        same 401 a bad token produces; the server log names the expected and received values on
-        every rejection. It filters background internet noise before the token is checked and is
-        not a substitute for the token, so leaving it empty is a reasonable choice.</p></div>
+      <p class="fine">Matched against the <span class="mono">X-Apb-Agent</span> header the generated
+        scripts send, or any <span class="mono">User-Agent</span>. RouterOS sets its own User-Agent
+        and does not reliably let a script override it, which is why the dedicated header exists.
+        <strong>Changing this stops every router that is already deployed</strong>: the value is
+        baked into a bundle when it is generated, so you must then regenerate and reinstall every
+        bundle. Until you do, those routers get the same 401 a bad token produces, and the server
+        log names the expected and received values on every rejection. It only filters background
+        internet noise before the token is checked and is not a substitute for the token, so leaving
+        it empty is a reasonable choice.</p></div>
   </div>
 </section>
 

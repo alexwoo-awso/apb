@@ -45,9 +45,17 @@ syncing, then revoke the old one.
 Unknown, revoked, expired and disabled-device tokens all produce the same
 `401`, so probing cannot tell them apart.
 
-If `require_user_agent` is set under Settings, requests must also carry that
-exact `User-Agent`. It is a noise filter, not a control: it keeps background
-internet scanning out of the logs before the token is even checked.
+If `require_user_agent` is set under Settings, requests must also identify
+themselves with that exact value, in the `X-Apb-Agent` header the generated
+scripts send or in any `User-Agent`. The dedicated header exists because
+RouterOS sets its own `User-Agent` and does not reliably let a script override
+it — a v6 router sends `Mikrotik/6.x Fetch` whatever the script asks for.
+
+It is a noise filter, not a control: it keeps background internet scanning out
+of the logs before the token is even checked, and it travels in clear text in
+the same file as the token, so it protects nothing the token does not. Note that
+its value is baked into a bundle at generation time, so changing it rejects every
+router still running an older bundle until they are regenerated.
 
 ### Rate limits
 

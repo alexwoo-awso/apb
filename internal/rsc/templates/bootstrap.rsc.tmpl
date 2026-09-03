@@ -11,7 +11,7 @@
 :local MaxPages {{.MaxPages}}
 :global apbCursor
 :global apbBootLock
-:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Hdr ("Authorization: Bearer " . $Token . ",user-agent: " . $UA . ",X-Apb-Agent: " . $UA)
 :local Now [/system resource get uptime]
 :local Run true
 :if ([:typeof $apbBootLock] = "time") do={ :if (($Now - $apbBootLock) < 30m) do={ :set Run false } }

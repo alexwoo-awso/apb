@@ -140,10 +140,16 @@ actually arrived whole.
 **The router reaches the server but everything is 401.**
 
 Check the server log. A rejection names the reason. `reason=user-agent` means
-this instance has a required User-Agent set under Settings and the router is
-sending a different one, which happens whenever that setting is changed without
-regenerating the bundles built against the old value. The log line carries both
-values. Either clear the setting or regenerate this router's bundle.
+this instance has a required client identity set under Settings and the router
+is not sending it, which happens whenever that setting is changed without
+regenerating the bundles built against the old value. The log line carries the
+expected value and both headers it looked in. Either clear the setting or
+regenerate this router's bundle.
+
+RouterOS sets its own `User-Agent` and does not reliably let a script override
+it, so the scripts also send the value in `X-Apb-Agent` and the server accepts
+either. A bundle generated before 2.0.4 sends only `User-Agent` and will be
+rejected on RouterOS 6.
 `reason="unknown token"` means the token was revoked, expired, or the device was
 disabled.
 

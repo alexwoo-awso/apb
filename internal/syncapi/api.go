@@ -88,8 +88,9 @@ func (a *API) authed(next deviceHandler) http.Handler {
 			// game: it happens whenever this setting is changed without
 			// regenerating the bundles that were built against the old value.
 			a.log.Warn("device request rejected",
-				"ip", ip, "reason", "user-agent", "path", r.URL.Path,
-				"want", want, "got", clip(strings.Join(r.Header.Values("User-Agent"), " | "), 120),
+				"ip", ip, "reason", "user-agent", "path", r.URL.Path, "want", want,
+				"got_agent_header", clip(r.Header.Get(AgentHeader), 120),
+				"got_user_agent", clip(strings.Join(r.Header.Values("User-Agent"), " | "), 120),
 				"fix", "clear require_user_agent under Settings, or regenerate this device's bundle so it sends the current value")
 			w.Header().Set("WWW-Authenticate", `Bearer realm="apb"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -137,11 +138,22 @@ func (a *API) deny(w http.ResponseWriter, r *http.Request, ip, reason string) {
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
 }
 
-// agentMatches reports whether the required agent string is present. It checks
-// every User-Agent header rather than only the first, because an HTTP client
-// that appends its own identity alongside the one a script asked for would
-// otherwise be rejected for a header it did send.
+// AgentHeader is the dedicated header the generated scripts use to identify
+// themselves. It exists because RouterOS sets User-Agent itself and does not
+// reliably let a script override it: a v6 router sends "Mikrotik/6.x Fetch"
+// whatever the script asks for. A header RouterOS has no opinion about is
+// passed through verbatim, so the gate works the same on every version.
+const AgentHeader = "X-Apb-Agent"
+
+// agentMatches reports whether the required client identity is present, in the
+// dedicated header or in any User-Agent value. Every User-Agent value is
+// checked rather than only the first, because a client that appends its own
+// identity alongside the one a script asked for must not be rejected for a
+// header it did send.
 func agentMatches(r *http.Request, want string) bool {
+	if r.Header.Get(AgentHeader) == want {
+		return true
+	}
 	for _, got := range r.Header.Values("User-Agent") {
 		if got == want {
 			return true

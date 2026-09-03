@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.4 — 2026-09-03
+
+### Fixed
+
+- **The client identity gate could never be satisfied on RouterOS 6.** RouterOS
+  sets its own `User-Agent` and does not let a script override it through
+  `http-header-field`: a v6 router sends `Mikrotik/6.x Fetch` whatever the
+  script asks for, so a configured gate rejected every request forever. The
+  generated scripts now send the value in a dedicated `X-Apb-Agent` header,
+  which RouterOS has no opinion about and passes through verbatim, and in a
+  lowercase `user-agent` entry, which is the form that demonstrably reached the
+  server on this RouterOS version. The gate accepts either.
+- The rejection log names both headers it looked in, not just one.
+
+### Changed
+
+- The setting is now labelled "Required client identity", because it is no
+  longer only about `User-Agent`.
+
+**A bundle generated before this release sends only `User-Agent` and will be
+rejected on RouterOS 6 whenever the gate is set. Regenerate it, or leave the
+setting empty.**
+
 ## 2.0.3 — 2026-09-03
 
 ### Fixed

@@ -7,7 +7,7 @@
 :local Url "{{.BaseURL}}/api/v1"
 :local Token "{{.Token}}"
 :local UA "{{.UserAgent}}"
-:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Hdr ("Authorization: Bearer " . $Token . ",user-agent: " . $UA . ",X-Apb-Agent: " . $UA)
 :local Res ""
 :log info ("APB test: GET " . $Url . "/whoami as {{.Mode}}, certificate check {{.VerifyCert}}")
 :do { :set Res [/tool fetch url=($Url . "/whoami") http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :log error "APB test: fetch raised an error. The usual causes are a name that does not resolve, no route to the server, or a certificate the router will not accept." }
