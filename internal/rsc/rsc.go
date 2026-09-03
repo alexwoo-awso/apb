@@ -44,6 +44,11 @@ type Params struct {
 	VerifyCert     string
 	IPv6           bool
 
+	// Mode is the /tool fetch transport, derived from BaseURL. RouterOS 6
+	// defaults it to http and rejects check-certificate outside https mode, so
+	// an https endpoint without an explicit mode fails every fetch.
+	Mode string
+
 	// AllowInsecureURL permits a plain HTTP endpoint. It exists only so the
 	// service can be exercised locally; a token sent over HTTP is readable by
 	// anyone on the path, so production always leaves this false.
@@ -95,6 +100,10 @@ func FromDevice(d model.Device, baseURL, instance, token, userAgent string) Para
 	if p.UserAgent == "" {
 		p.UserAgent = "apb-router"
 	}
+	p.Mode = "https"
+	if strings.HasPrefix(p.BaseURL, "http://") {
+		p.Mode = "http"
+	}
 	return p
 }
 
@@ -144,6 +153,9 @@ func (p *Params) validate() error {
 	if !reIdent.MatchString(strings.TrimSuffix(p.Prefix, "-")) {
 		return fmt.Errorf("script name prefix %q is not usable", p.Prefix)
 	}
+	if p.Mode != "http" && p.Mode != "https" {
+		return fmt.Errorf("fetch mode %q must be http or https", p.Mode)
+	}
 	return nil
 }
 
@@ -178,6 +190,10 @@ func Generate(p Params) (Bundle, error) {
 	if err != nil {
 		return Bundle{}, err
 	}
+	probe, err := render("test.rsc.tmpl", p)
+	if err != nil {
+		return Bundle{}, err
+	}
 
 	scripts := []struct {
 		name string
@@ -188,6 +204,7 @@ func Generate(p Params) (Bundle, error) {
 		{p.Prefix + "bootstrap", bootstrap, "rebuilds the whole list after a reboot"},
 		{p.Prefix + "report", report, "uploads locally detected addresses"},
 		{p.Prefix + "purge", purge, "clears every address APB manages here"},
+		{p.Prefix + "test", probe, "one-shot connectivity check, run it by hand"},
 	}
 
 	var scriptSection strings.Builder

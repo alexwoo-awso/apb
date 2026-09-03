@@ -20,6 +20,7 @@ runs the first rebuild immediately so you can see it work.
 | `apb-bootstrap` | `interval=0`, `start-time=startup` | rebuilds the whole list, in pages |
 | `apb-report` | `interval=5m`, `start-time=startup` | uploads new entries from the detection list |
 | `apb-purge` | manual | clears every address APB manages here |
+| `apb-test` | manual | one call to the server, reporting exactly what came back |
 
 Scripts run with `policy=read,write,test` — `test` is what `/tool fetch` needs.
 The original APB scripts requested `ftp,reboot,policy,password,sniff,sensitive,
@@ -135,6 +136,19 @@ whose line continuations were broken in transit. Regenerate the bundle from the
 console: current bundles contain no continuations and import the same with LF or
 CRLF endings. Check with `/file print detail where name~"apb"` that the file
 actually arrived whole.
+
+**Nothing works and the log just repeats `rebuild failed`.**
+
+Run the connectivity test. It is installed with the bundle and does exactly one
+call, so it turns a retry loop into a single readable answer:
+
+```
+/system script run apb-test
+/log print where message~"APB test"
+```
+
+It reports the transport it used, the fetch status, the server's raw reply and
+whether the token was accepted. A healthy run logs a reply starting `1,`.
 
 **Nothing appears in the console.**
 

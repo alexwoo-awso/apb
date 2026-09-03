@@ -283,3 +283,55 @@ func unescapeRSC(s string) string {
 	}
 	return b.String()
 }
+
+// RouterOS 6 defaults /tool fetch to mode=http and rejects check-certificate
+// outside https mode, so an https endpoint without an explicit mode fails every
+// single fetch — which is exactly how the first field install failed.
+func TestEveryFetchCarriesTheTransportMode(t *testing.T) {
+	for _, tc := range []struct {
+		base, wantMode string
+		wantCertOpt    bool
+	}{
+		{"https://apb.example.org", "https", true},
+		{"http://localhost:8080", "http", false},
+	} {
+		d := testDevice()
+		p := FromDevice(d, tc.base, "APB", "apb_abcdefghijklmnop", "apb-router")
+		p.AllowInsecureURL = true
+		b, err := Generate(p)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.base, err)
+		}
+		body := unwrap(b.Install)
+		fetches := strings.Count(body, "/tool fetch")
+		if fetches == 0 {
+			t.Fatalf("%s: no fetch calls in the bundle", tc.base)
+		}
+		if got := strings.Count(body, "mode="+tc.wantMode); got != fetches {
+			t.Errorf("%s: %d fetch calls but %d carry mode=%s", tc.base, fetches, got, tc.wantMode)
+		}
+		// check-certificate is only accepted in https mode.
+		if got := strings.Contains(body, "check-certificate="); got != tc.wantCertOpt {
+			t.Errorf("%s: check-certificate present=%v, want %v", tc.base, got, tc.wantCertOpt)
+		}
+	}
+}
+
+func TestBundleShipsAConnectivityTest(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	b, err := Generate(p)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !strings.Contains(b.Install, `name="apb-test"`) {
+		t.Error("the bundle does not install the connectivity test")
+	}
+	body := unwrap(b.Install)
+	if !strings.Contains(body, "/whoami") {
+		t.Error("the connectivity test does not call whoami")
+	}
+	// It must not be scheduled: it exists to be run by hand.
+	if strings.Contains(b.Scheduler, "apb-test") {
+		t.Error("the connectivity test should not be scheduled")
+	}
+}

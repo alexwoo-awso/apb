@@ -1,0 +1,22 @@
+# APB connectivity test for {{.DeviceName}}.
+# Run it by hand and read the log:
+#   /system script run {{.Prefix}}test
+#   /log print where message~"APB test"
+# It performs exactly one call and reports what came back, so a router that is
+# not syncing can be diagnosed without guessing.
+:local Url "{{.BaseURL}}/api/v1"
+:local Token "{{.Token}}"
+:local UA "{{.UserAgent}}"
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Res ""
+:log info ("APB test: GET " . $Url . "/whoami as {{.Mode}}, certificate check {{.VerifyCert}}")
+:do { :set Res [/tool fetch url=($Url . "/whoami") http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :log error "APB test: fetch raised an error. The usual causes are a name that does not resolve, no route to the server, or a certificate the router will not accept." }
+:if ([:typeof $Res] = "array") do={
+:log info ("APB test: status " . ($Res->"status"))
+:log info ("APB test: reply " . ($Res->"data"))
+:if (($Res->"status") = "finished") do={
+:if ([:pick ($Res->"data") 0 2] = "1,") do={ :log info "APB test: the server answered correctly, this router is configured and authorised" } else={ :log error "APB test: the server answered but not with a configuration line, so the token is probably wrong or revoked" }
+}
+} else={
+:log error "APB test: no reply at all. Nothing reached the server."
+}

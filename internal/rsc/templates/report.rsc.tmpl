@@ -35,7 +35,7 @@
 :if ($Count > 0) do={
 :local Meta (",Content-Type: text/plain,X-Apb-Identity: " . [/system identity get name] . ",X-Apb-Ros: " . [/system resource get version] . ",X-Apb-Model: " . [/system resource get board-name])
 :local Res ""
-:do { :set Res [/tool fetch url=($Url . "/report") http-method=post http-data=$Payload http-header-field=($Hdr . $Meta) check-certificate={{.VerifyCert}} output=user as-value] } on-error={ :log warning "APB: report request failed" }
+:do { :set Res [/tool fetch url=($Url . "/report") http-method=post http-data=$Payload http-header-field=($Hdr . $Meta) {{template "fetchopts" .}} output=user as-value] } on-error={ :log warning ("APB: report could not reach " . $Url . " - run apb-test for detail") }
 :if ([:typeof $Res] = "array") do={
 :if (($Res->"status") = "finished") do={
 :local Data ($Res->"data")

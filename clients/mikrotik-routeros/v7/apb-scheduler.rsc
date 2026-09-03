@@ -1,5 +1,5 @@
 # APB scheduler for "edge-1" (RouterOS v7)
-# Generated 2026-09-03 16:17:20Z by APB.
+# Generated 2026-09-03 17:14:06Z by APB.
 #
 # Import with:  /import file-name=<this file>
 :do { /system scheduler remove [find name="apb-sync"] } on-error={ :log debug "APB: no previous apb-sync" }

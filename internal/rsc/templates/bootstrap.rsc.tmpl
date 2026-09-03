@@ -30,7 +30,7 @@
 :if ($Next > 0) do={ :set U ($U . "?a=" . $Next) }
 :set Next 0
 :local Res ""
-:do { :set Res [/tool fetch url=$U http-method=get http-header-field=$Hdr check-certificate={{.VerifyCert}} output=user as-value] } on-error={ :set Failed true }
+:do { :set Res [/tool fetch url=$U http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :set Failed true ; :log warning ("APB: rebuild could not reach " . $U . " - check DNS, routing and the certificate setting") }
 :if (!$Failed) do={
 :if ([:typeof $Res] = "array") do={
 :if (($Res->"status") = "finished") do={
@@ -48,12 +48,12 @@
 :if ($K = "n") do={ :set Next [:tonum $V] }
 }
 }
-} else={ :set Failed true }
-} else={ :set Failed true }
+} else={ :set Failed true ; :log warning ("APB: rebuild got fetch status " . ($Res->"status")) }
+} else={ :set Failed true ; :log warning "APB: rebuild got no reply from the server" }
 }
 } while=((!$Failed) && ($Next > 0) && ($Page < $MaxPages))
 :if ($Failed) do={
-:log error "APB: rebuild failed, the sync script will retry"
+:log error ("APB: rebuild failed on page " . $Page . ", the sync script will retry. Run " . "{{.Prefix}}test" . " to see why.")
 } else={
 :if ($NewCursor >= 0) do={ :set apbCursor $NewCursor }
 :log info ("APB: rebuild complete, " . $Total . " addresses, cursor " . $NewCursor)

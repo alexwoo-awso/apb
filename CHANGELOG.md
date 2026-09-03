@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.2 — 2026-09-03
+
+### Fixed
+
+- **Every fetch failed on RouterOS 6.** `/tool fetch` defaults to `mode=http`
+  and accepts `check-certificate` only in https mode, so an https endpoint with
+  no explicit mode failed on both counts: the wrong transport, and a parameter
+  that is not valid for it. The router logged nothing but
+  `APB: rebuild failed, the sync script will retry` in a loop and never reached
+  the server. Every fetch now carries a `mode=` derived from the configured base
+  URL, and `check-certificate` is emitted only where it is legal.
+- **The error handling hid the cause.** A failed fetch set a flag and produced
+  one generic message. Each failure path now says what it was doing and what
+  came back: the URL it could not reach, the fetch status it got, or that the
+  reply was empty.
+
+### Added
+
+- **`apb-test`**, a one-shot connectivity check installed with every bundle and
+  deliberately not scheduled. Run `/system script run apb-test` and read
+  `/log print where message~"APB test"`: it reports the transport it used, the
+  fetch status, the server's raw reply, and whether the token was accepted. It
+  turns a silent retry loop into a single readable answer.
+
+A test now asserts that every `/tool fetch` in a generated bundle carries the
+transport mode, and that `check-certificate` appears only for https endpoints.
+
+**Regenerate and reinstall any bundle produced by 2.0.0 or 2.0.1.**
+
 ## 2.0.1 — 2026-09-03
 
 ### Fixed
