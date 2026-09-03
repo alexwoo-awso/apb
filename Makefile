@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-VERSION ?= 2.0.7
+VERSION ?= 2.0.8
 COMMIT  := $(shell git rev-parse --short=12 HEAD 2>/dev/null)
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w \

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.8 — 2026-09-03
+
+A RouterOS 6.49 router refuses every `address-list add ... timeout=` the
+scripts issue. That operation is the basis of the whole design — a timeout is
+what keeps an entry in RAM rather than on flash — and it had never executed on
+that router, because the blocklist was empty for every attempt so far.
+
+### Changed
+
+- The timeout is written as a literal rather than passed through a RouterOS
+  variable. That was one of two candidate causes and is what a person would type
+  at the CLI, so it removes a conversion step that cannot be observed from
+  inside a script.
+
+### Added
+
+- `apb-test` now walks a ladder of address-list writes that varies one thing at
+  a time — the address, the size of the timeout, and literal versus variable —
+  so a refusal is attributed rather than guessed at. The largest value that
+  reports OK is the one to set as the device's entry timeout.
+- **Drift detection.** A router can lose entries behind the server's back: a
+  timeout expires, an operator flushes the list, a rebuild half-finishes. The
+  cursor cannot see any of that, because by the changelog the device is up to
+  date. The count each router already reports is now compared against what it
+  should hold, and a device that is caught up but short is told to rebuild, at
+  most once every fifteen minutes so a router that cannot hold the list is not
+  put in a loop. This makes a short entry timeout survivable rather than a
+  silent hole.
+
 ## 2.0.7 — 2026-09-03
 
 ### Fixed

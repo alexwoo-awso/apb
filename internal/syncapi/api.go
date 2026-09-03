@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexwoo-awso/apb/internal/auth"
@@ -47,6 +48,12 @@ type API struct {
 	log     *slog.Logger
 	authLim *httpx.Limiter // unauthenticated attempts, keyed by client address
 	devLim  *httpx.Limiter // authenticated traffic, keyed by device
+
+	// driftMu guards the record of when each device was last told to rebuild
+	// because its list had drifted, so a router that cannot hold the list is
+	// not put into a rebuild loop.
+	driftMu    sync.Mutex
+	lastResync map[int64]time.Time
 }
 
 // New builds the device API.
@@ -60,8 +67,32 @@ func New(db *store.DB, keys *auth.Keyring, log *slog.Logger) *API {
 		authLim: httpx.NewLimiter(0.5, 10),
 		// A device polling every 15s uses ~0.07 req/s; this leaves ample room
 		// for catch-up loops while capping a runaway script.
-		devLim: httpx.NewLimiter(4, 60),
+		devLim:     httpx.NewLimiter(4, 60),
+		lastResync: map[int64]time.Time{},
 	}
+}
+
+// resyncInterval is the least time between two drift-triggered rebuilds of the
+// same device.
+const resyncInterval = 15 * time.Minute
+
+// driftNeedsResync reports whether a device that is fully caught up is holding
+// fewer addresses than it should, and whether enough time has passed to act on
+// it. Entries can disappear behind the server's back: a timeout expires, an
+// operator flushes the list, a rebuild half-finishes. The cursor cannot detect
+// any of that, because from the changelog's point of view the device is up to
+// date.
+func (a *API) driftNeedsResync(deviceID, held, blocked int64) bool {
+	if held < 0 || blocked == 0 || held >= blocked {
+		return false
+	}
+	a.driftMu.Lock()
+	defer a.driftMu.Unlock()
+	if last, ok := a.lastResync[deviceID]; ok && time.Since(last) < resyncInterval {
+		return false
+	}
+	a.lastResync[deviceID] = time.Now()
+	return true
 }
 
 // Routes registers the device endpoints on mux.
@@ -292,9 +323,19 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request, d model.Device)
 		a.log.Warn("record sync", "device", d.Name, "err", err)
 	}
 
+	if !delta.Resync && delta.Empty() && applied >= 0 {
+		// The device is caught up by cursor but may still have lost entries.
+		if blocked, err := a.db.BlockedCount(r.Context(), d.IPv6); err == nil &&
+			a.driftNeedsResync(d.ID, applied, blocked) {
+			a.log.Info("device list has drifted, asking for a rebuild",
+				"device", d.Name, "holds", applied, "expected", blocked)
+			delta.Resync = true
+		}
+	}
 	if delta.Resync {
-		// The router has been away longer than the changelog is retained, so
-		// an incremental catch-up is no longer provably complete.
+		// Either the router has been away longer than the changelog is
+		// retained, or it is holding fewer addresses than it should, so an
+		// incremental catch-up is no longer provably complete.
 		io.WriteString(w, "r1")
 		return
 	}

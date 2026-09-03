@@ -640,3 +640,48 @@ func TestGeneratedBundleCarriesTheRequiredAgent(t *testing.T) {
 		t.Error("the bundle does not send the User-Agent this instance requires")
 	}
 }
+
+// A router can lose entries behind the server's back: a timeout expires, an
+// operator flushes the list, a rebuild half-finishes. The cursor cannot detect
+// any of that, because by the changelog the device is up to date. The count the
+// router reports is the only signal, and the server acts on it.
+func TestDriftTriggersARebuild(t *testing.T) {
+	h := newHarness(t)
+	if code, _ := h.api(http.MethodPost, "/api/v1/report", "45.83.64.7,91.240.118.3"); code != http.StatusOK {
+		t.Fatal("seed report failed")
+	}
+	_, body := h.api(http.MethodGet, "/api/v1/sync?c=0", "")
+	cursor := cursorOf(t, body)
+
+	// Caught up and holding what it should: nothing to do.
+	code, body := h.api(http.MethodGet, "/api/v1/sync?c="+strconv.FormatInt(cursor, 10)+"&n=2", "")
+	if code != http.StatusOK {
+		t.Fatalf("sync: %d", code)
+	}
+	if strings.Contains(body, "r1") {
+		t.Errorf("a device holding the right number was told to rebuild: %q", body)
+	}
+
+	// Caught up but holding fewer than it should: rebuild.
+	code, body = h.api(http.MethodGet, "/api/v1/sync?c="+strconv.FormatInt(cursor, 10)+"&n=0", "")
+	if code != http.StatusOK {
+		t.Fatalf("sync: %d", code)
+	}
+	if !strings.Contains(body, "r1") {
+		t.Errorf("a device that had lost its entries was not told to rebuild: %q", body)
+	}
+
+	// It must not be told again immediately: a router that cannot hold the list
+	// would otherwise rebuild on every poll for ever.
+	_, body = h.api(http.MethodGet, "/api/v1/sync?c="+strconv.FormatInt(cursor, 10)+"&n=0", "")
+	if strings.Contains(body, "r1") {
+		t.Errorf("the rebuild was demanded twice in a row: %q", body)
+	}
+
+	// A device reporting no count at all is left alone; only an explicit count
+	// is evidence.
+	_, body = h.api(http.MethodGet, "/api/v1/sync?c="+strconv.FormatInt(cursor, 10), "")
+	if strings.Contains(body, "r1") {
+		t.Errorf("a device that reported no count was told to rebuild: %q", body)
+	}
+}

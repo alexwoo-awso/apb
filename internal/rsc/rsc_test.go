@@ -464,7 +464,7 @@ func TestCursorIsPersistedOutsideTheGlobal(t *testing.T) {
 			t.Errorf("%s never records the cursor", name)
 			continue
 		}
-		if !strings.Contains(body[i:i+160], "timeout=$Timeout") {
+		if !strings.Contains(body[i:i+160], "timeout="+p.BlockTimeout) {
 			t.Errorf("%s writes the cursor marker without a timeout, which puts it on flash", name)
 		}
 	}
@@ -480,5 +480,35 @@ func TestCursorIsPersistedOutsideTheGlobal(t *testing.T) {
 	}
 	if strings.Contains(b.Install, "cursor "+`" . $NewCursor`) {
 		t.Error("the rebuild still reports the received cursor rather than the stored one")
+	}
+}
+
+// The timeout is written as a literal rather than passed through a RouterOS
+// variable. A 6.49 router refused every "address-list add ... timeout=" the
+// scripts issued, and passing the value through a :local was one of two
+// candidate causes; a literal is what a person would type at the CLI and
+// removes the conversion step entirely.
+func TestTimeoutIsWrittenAsALiteral(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	for _, name := range []string{"sync.rsc.tmpl", "bootstrap.rsc.tmpl", "report.rsc.tmpl"} {
+		body, err := render(name, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(body, "timeout=$") {
+			t.Errorf("%s passes a timeout through a variable", name)
+		}
+		for i := 0; ; {
+			j := strings.Index(body[i:], "address-list add")
+			if j < 0 {
+				break
+			}
+			start := i + j
+			window := body[start:min(start+200, len(body))]
+			if !strings.Contains(window, "timeout=") {
+				t.Errorf("%s: an add with no timeout would land on flash: %.100s", name, window)
+			}
+			i = start + len("address-list add")
+		}
 	}
 }

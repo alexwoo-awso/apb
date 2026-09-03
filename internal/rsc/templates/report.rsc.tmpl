@@ -40,7 +40,7 @@
 :if (($Res->"status") = "finished") do={
 :local Data ($Res->"data")
 :if ([:pick $Data 0 2] = "ok") do={
-:foreach A in=[:toarray $Payload] do={ :do { /ip firewall address-list add list=$Sent address=$A timeout=$SentTimeout comment="apb-sent" } on-error={} }
+:foreach A in=[:toarray $Payload] do={ :do { /ip firewall address-list add list=$Sent address=$A timeout={{.SentTimeout}} comment="apb-sent" } on-error={} }
 :log info ("APB: reported " . $Count . " addresses")
 } else={ :log warning ("APB: report rejected: " . $Data) }
 }

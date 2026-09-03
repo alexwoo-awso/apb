@@ -40,13 +40,25 @@
 :do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",X-Apb-Agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe D, custom X- header: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe D, custom X- header: REFUSED by RouterOS" }
 :log info "APB test: done with headers. The identity travels in the URL, so a REFUSED probe costs nothing; it only records what this build tolerates."
 
-# Address-list write probe. Everything this project installs depends on being
-# able to add an entry that carries a timeout, because a timeout is what keeps
-# the entry in RAM instead of on flash. These probe that directly, in a throwaway
-# list, so a refusal is attributed to the exact operation rather than inferred.
-:do { /ip firewall address-list add list=$State address={{.StateAddress}} timeout=$Timeout comment="probe" ; :log info "APB test: write E, address with timeout and comment: OK" } on-error={ :log error "APB test: write E, address with timeout and comment: REFUSED" }
-:do { /ip firewall address-list remove [find list=$State] ; :log info "APB test: write F, remove a list that has entries: OK" } on-error={ :log error "APB test: write F, remove a list that has entries: REFUSED" }
-:do { /ip firewall address-list remove [find list=$State] ; :log info "APB test: write G, remove a list that is already empty: OK" } on-error={ :log error "APB test: write G, remove a list that is already empty: REFUSED - this is what breaks recording the cursor" }
-:do { /ip firewall address-list add list=$State address={{.StateAddress}} timeout=$Timeout ; :log info "APB test: write H, address with timeout and no comment: OK" } on-error={ :log error "APB test: write H, address with timeout and no comment: REFUSED" }
+# Address-list write probe. Adding an entry that carries a timeout is the whole
+# basis of this design: a timeout is what keeps the entry in RAM instead of on
+# the router's flash. If that is refused, nothing else matters. These vary one
+# thing at a time - the address, the size of the timeout, and whether it is
+# written literally or passed through a variable - so the refusal can be
+# attributed rather than guessed at.
+:local Timeout {{.BlockTimeout}}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=1d ; :log info "APB test: write J, ordinary address, 1d: OK" } on-error={ :log error "APB test: write J, ordinary address, 1d: REFUSED" }
 :do { /ip firewall address-list remove [find list=$State] } on-error={}
-:log info "APB test: finished. Every write above uses a timeout, so nothing this script does can reach the router's flash."
+:do { /ip firewall address-list add list=$State address={{.StateAddress}} timeout=1d ; :log info "APB test: write K, marker address {{.StateAddress}}, 1d: OK" } on-error={ :log error "APB test: write K, marker address {{.StateAddress}}, 1d: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=4w ; :log info "APB test: write L, 4w: OK" } on-error={ :log error "APB test: write L, 4w: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=52w ; :log info "APB test: write M, 52w: OK" } on-error={ :log error "APB test: write M, 52w: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=520w ; :log info "APB test: write N, 520w written literally: OK" } on-error={ :log error "APB test: write N, 520w written literally: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=$Timeout ; :log info "APB test: write O, the configured timeout through a variable: OK" } on-error={ :log error "APB test: write O, the configured timeout through a variable: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout={{.BlockTimeout}} comment="probe" ; :log info "APB test: write P, exactly what the real scripts do: OK" } on-error={ :log error "APB test: write P, exactly what the real scripts do: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:log info "APB test: finished. The largest timeout that says OK is the one to set as the entry timeout on the device page. Every probe carries a timeout, so none of this reached the router's flash."
