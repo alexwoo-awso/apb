@@ -137,6 +137,16 @@ console: current bundles contain no continuations and import the same with LF or
 CRLF endings. Check with `/file print detail where name~"apb"` that the file
 actually arrived whole.
 
+**The router reaches the server but everything is 401.**
+
+Check the server log. A rejection names the reason. `reason=user-agent` means
+this instance has a required User-Agent set under Settings and the router is
+sending a different one, which happens whenever that setting is changed without
+regenerating the bundles built against the old value. The log line carries both
+values. Either clear the setting or regenerate this router's bundle.
+`reason="unknown token"` means the token was revoked, expired, or the device was
+disabled.
+
 **Nothing works and the log just repeats `rebuild failed`.**
 
 Run the connectivity test. It is installed with the bundle and does exactly one

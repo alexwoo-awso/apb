@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.3 — 2026-09-03
+
+### Fixed
+
+- **A User-Agent mismatch was undiagnosable.** The gate rejected with the same
+  bare 401 a bad token produces, and logged only `reason: user-agent`. The log
+  now names the value expected, the value received, and how to recover. This
+  setting is the one most able to take an estate offline — its value is baked
+  into a bundle when that bundle is generated, so changing it silently rejects
+  every router still running an older bundle — and it was the least explicable
+  failure in the system.
+- The gate now matches against every `User-Agent` header rather than only the
+  first, so a client that appends its own identity alongside the one a script
+  asked for is not rejected for a header it did send.
+
+### Changed
+
+- The Devices page shows a warning whenever the gate is active, naming the
+  required value and what to do about routers that predate it.
+- The script generation page states which User-Agent the bundle will carry.
+- The setting's own help text now leads with the consequence of changing it.
+
 ## 2.0.2 — 2026-09-03
 
 ### Fixed

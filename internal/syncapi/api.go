@@ -81,10 +81,18 @@ func (a *API) authed(next deviceHandler) http.Handler {
 		ip := httpx.ClientIP(r)
 		s := a.db.Settings()
 
-		if want := s.RequireUserAgent; want != "" && r.UserAgent() != want {
-			// Answer exactly as an unauthenticated request would, so probing
-			// for the gate reveals nothing.
-			a.deny(w, r, ip, "user-agent")
+		if want := s.RequireUserAgent; want != "" && !agentMatches(r, want) {
+			// The client is told nothing, so probing for the gate reveals
+			// nothing. The operator's log gets both values, because a mismatch
+			// here looks exactly like a bad token and is otherwise a guessing
+			// game: it happens whenever this setting is changed without
+			// regenerating the bundles that were built against the old value.
+			a.log.Warn("device request rejected",
+				"ip", ip, "reason", "user-agent", "path", r.URL.Path,
+				"want", want, "got", clip(strings.Join(r.Header.Values("User-Agent"), " | "), 120),
+				"fix", "clear require_user_agent under Settings, or regenerate this device's bundle so it sends the current value")
+			w.Header().Set("WWW-Authenticate", `Bearer realm="apb"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -127,6 +135,19 @@ func (a *API) deny(w http.ResponseWriter, r *http.Request, ip, reason string) {
 	a.log.Warn("device request rejected", "ip", ip, "reason", reason, "path", r.URL.Path)
 	w.Header().Set("WWW-Authenticate", `Bearer realm="apb"`)
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
+}
+
+// agentMatches reports whether the required agent string is present. It checks
+// every User-Agent header rather than only the first, because an HTTP client
+// that appends its own identity alongside the one a script asked for would
+// otherwise be rejected for a header it did send.
+func agentMatches(r *http.Request, want string) bool {
+	for _, got := range r.Header.Values("User-Agent") {
+		if got == want {
+			return true
+		}
+	}
+	return false
 }
 
 func bearer(r *http.Request) (string, bool) {

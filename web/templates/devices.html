@@ -1,5 +1,14 @@
 {{define "devices.html"}}{{template "head" .}}
 {{template "hintcard" dict "Key" "devices" "Hints" .Hints "CSRF" .CSRF "Back" "/devices"}}
+{{if .Settings.RequireUserAgent}}
+<div class="flash warn">
+  This instance only accepts routers whose requests carry the User-Agent
+  <strong class="mono">{{.Settings.RequireUserAgent}}</strong>. That value is baked into a bundle when
+  it is generated, so any router still running a bundle built against a different value is being
+  rejected and will show as offline. Regenerate those bundles, or clear the setting under
+  <a href="/settings">Settings</a>. The server log names both values on every rejection.
+</div>
+{{end}}
 
 <section class="panel">
   <header class="panel-head">
@@ -302,6 +311,12 @@
     <span class="dim">endpoint <span class="mono">{{.Data.BaseURL}}/api/v1</span></span>
   </header>
   {{if .Admin.CanWrite}}
+  {{if .Settings.RequireUserAgent}}
+  <p class="fine">This bundle will send the User-Agent
+    <strong class="mono">{{.Settings.RequireUserAgent}}</strong>, which is what this instance
+    currently requires. Changing that setting later stops this router syncing until you generate a
+    new bundle.</p>
+  {{end}}
   <form method="post" action="/devices/{{$d.ID}}/scripts" class="row grouped">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <div class="field">

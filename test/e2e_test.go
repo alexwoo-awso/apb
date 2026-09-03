@@ -579,3 +579,64 @@ func trunc(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// The User-Agent gate filters internet noise before the token is checked. It is
+// also the setting most able to take an estate offline, because its value is
+// baked into a bundle when that bundle is generated, so the rules around it
+// need to be exact.
+func TestUserAgentGate(t *testing.T) {
+	h := newHarness(t)
+	if err := h.db.SaveSettings(t.Context(), map[string]string{"require_user_agent": "apb-router"}); err != nil {
+		t.Fatal(err)
+	}
+
+	call := func(agents ...string) int {
+		req, _ := http.NewRequest(http.MethodGet, h.srv.URL+"/api/v1/sync?c=0", nil)
+		req.Header.Set("Authorization", "Bearer "+h.token)
+		req.Header.Del("User-Agent")
+		for _, a := range agents {
+			req.Header.Add("User-Agent", a)
+		}
+		resp, err := h.srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := call("apb-router"); got != http.StatusOK {
+		t.Errorf("matching agent: got %d, want 200", got)
+	}
+	if got := call("something-else"); got != http.StatusUnauthorized {
+		t.Errorf("wrong agent: got %d, want 401", got)
+	}
+	if got := call(); got != http.StatusUnauthorized {
+		t.Errorf("no agent: got %d, want 401", got)
+	}
+	// Clearing the setting must restore every device immediately, with no
+	// regeneration: that is the recovery path when the gate is misconfigured.
+	if err := h.db.SaveSettings(t.Context(), map[string]string{"require_user_agent": ""}); err != nil {
+		t.Fatal(err)
+	}
+	if got := call("something-else"); got != http.StatusOK {
+		t.Errorf("gate disabled: got %d, want 200", got)
+	}
+}
+
+// A generated bundle must send whatever the gate currently requires, or
+// installing it produces a router that authenticates and is still refused.
+func TestGeneratedBundleCarriesTheRequiredAgent(t *testing.T) {
+	h := newHarness(t)
+	if err := h.db.SaveSettings(t.Context(), map[string]string{"require_user_agent": "custom-agent-1"}); err != nil {
+		t.Fatal(err)
+	}
+	code, body := h.post("/devices/"+strconv.FormatInt(h.device.ID, 10)+"/scripts",
+		url.Values{"part": {"install"}})
+	if code != http.StatusOK {
+		t.Fatalf("download: %d %s", code, trunc(body, 200))
+	}
+	if !strings.Contains(body, `custom-agent-1`) {
+		t.Error("the bundle does not send the User-Agent this instance requires")
+	}
+}
