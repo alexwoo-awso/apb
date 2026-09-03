@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.1.0 — 2026-09-03
+
+**RouterOS 6 cannot hold a ten-year address-list timeout.** Measured on a
+6.49.20 hEX S: `1d`, `4w` accepted; `52w`, `520w` refused. The boundary is
+`2^32` milliseconds, about 49.7 days, consistent with a 32-bit millisecond
+field. RouterOS 7 accepts up to 4294967295 seconds and is unaffected.
+
+This invalidates a claim made throughout the previous documentation, which
+described `520w` as safe on the strength of RouterOS 7 material. It is not safe
+on RouterOS 6, and the failure is silent in the worst way: the router imports
+the bundle, runs it, logs a successful rebuild, and holds nothing at all,
+because every individual `address-list add` is refused.
+
+### Changed
+
+- New RouterOS 6 devices default to a `4w` entry timeout; RouterOS 7 keeps
+  `520w`. The generator now refuses a v6 bundle whose timeout exceeds 49 days
+  rather than emitting one that cannot work.
+- The README, the architecture notes, the RouterOS guide and the settings help
+  all corrected. They previously stated the ten-year figure without
+  qualification.
+- The cursor description was also stale: it has been held in an address-list
+  marker as well as a global since 2.0.6, because the global did not survive
+  between scheduled runs.
+
+### Added
+
+- `apb-test` walks a finer ladder — 1d, 4w, 6w, 7w, 8w, 52w, 520w — so an
+  operator can find their own build's ceiling and set the device's entry timeout
+  to the largest value that works. Changing it needs no regeneration.
+
+### Why the shorter window is not a hole
+
+Entries on a RouterOS 6 router now expire after four weeks. Drift detection,
+added in 2.0.8, covers this: every sync carries the number of entries the router
+holds, and a router that is caught up by cursor but holding fewer addresses than
+the server has is told to rebuild. Expiry, a manual flush and a half-finished
+rebuild are indistinguishable from the changelog's point of view and are all
+caught the same way. The timeout only governs how long a router *cut off from
+the server* keeps protecting itself: ten years on v7, four weeks on v6.
+
 ## 2.0.8 — 2026-09-03
 
 A RouterOS 6.49 router refuses every `address-list add ... timeout=` the

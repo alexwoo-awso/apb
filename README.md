@@ -33,10 +33,22 @@ flash.
 
 This is the reason for the rework. RouterOS writes an address-list entry to
 flash unless it carries a timeout; entries *with* a timeout are held in memory
-and dropped on reboot. APB adds everything with `timeout=520w` — about ten
-years, and below the threshold where RouterOS starts displaying long timeouts
-as `0sec` — so a router accumulating a hundred thousand blocked addresses never
-touches its flash.
+and dropped on reboot. Everything APB adds carries a timeout, so a router
+accumulating a hundred thousand blocked addresses never touches its flash.
+
+How long a timeout depends on the branch, and the difference is not small:
+
+| | Default | Ceiling |
+|---|---|---|
+| RouterOS 7 | `520w`, about ten years | 4294967295 seconds |
+| RouterOS 6 | `4w` | about 49 days — `2^32` milliseconds |
+
+RouterOS 6 does not merely clamp a longer value, it **refuses the entry**, so a
+v6 router configured with `520w` accepts the scripts, runs them, and holds
+nothing at all. The generator rejects that combination rather than let it
+happen. The shorter v6 window is not a hole: the server compares what each
+router reports holding against what it should hold, and tells a router whose
+list has drifted to rebuild.
 
 A reboot therefore leaves the router with an empty list and no cursor. That is
 the expected state, and the `apb-bootstrap` script detects it and rebuilds the
@@ -80,9 +92,12 @@ Four scripts and three schedules, all prefixed `apb-`:
 | `apb-report` | every 5m | uploads new entries from the detection list |
 | `apb-purge` | manually | clears everything APB manages here |
 
-The scripts hold no state on disk. The replication cursor lives in a `:global`,
-which is RAM only, and the "already reported" marker is a second address list
-with its own timeout.
+The scripts hold no state on disk. The replication cursor is held in a `:global`
+and mirrored to an address-list marker carrying a timeout, because a RouterOS
+global did not survive between scheduled runs on the 6.49 router this was first
+deployed to; the "already reported" marker is a third address list, also with a
+timeout. All of it is RAM only and all of it is lost on reboot, which is exactly
+when it should be.
 
 Everything except the server address and the token is fetched from
 `/api/v1/whoami` at run time, so changing a router's interval, list name or

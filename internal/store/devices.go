@@ -38,7 +38,7 @@ func (db *DB) CreateDevice(ctx context.Context, d model.Device) (model.Device, e
 		d.DetectList = s.DefaultDetectList
 	}
 	if d.BlockTimeout == "" {
-		d.BlockTimeout = s.DefaultBlockTimeout
+		d.BlockTimeout = defaultBlockTimeout(d.ROSBranch, s.DefaultBlockTimeout)
 	}
 	if d.VerifyCert == "" {
 		d.VerifyCert = defaultVerify(d.ROSBranch)
@@ -298,6 +298,21 @@ func (db *DB) TokenByID(ctx context.Context, id int64) (model.DeviceToken, error
 		return t, ErrNotFound
 	}
 	return t, err
+}
+
+// defaultBlockTimeout keeps a new device inside what its RouterOS branch will
+// accept. RouterOS 6 refuses an address-list timeout beyond about 49 days and
+// then holds nothing at all, so a v6 device cannot take the ten-year value that
+// suits v7. Four weeks is measured-good on 6.49, and the server notices when a
+// list has drifted, so the shorter window heals itself.
+func defaultBlockTimeout(branch, configured string) string {
+	if branch == "v6" {
+		return "4w"
+	}
+	if configured == "" {
+		return "520w"
+	}
+	return configured
 }
 
 // defaultVerify picks a sensible TLS verification mode per RouterOS branch.

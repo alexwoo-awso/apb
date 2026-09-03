@@ -76,23 +76,43 @@ it has a timeout. Entries with a timeout live in RAM and disappear on reboot.
 The original APB added entries without a timeout, so every blocked address was a
 flash write, which is what caused trouble on devices with small or worn storage.
 
-APB adds everything with `timeout=520w`:
+How long that timeout can be is branch-specific, and getting it wrong is not a
+soft failure:
 
-- ≈ 315 million seconds, so about ten years.
-- Below 536 870 911 seconds, above which RouterOS displays a timeout as `0sec`
-  even though it still tracks it correctly. Staying under that keeps
-  `/ip firewall address-list print` readable.
-- Far below the 4 294 967 295 second maximum.
+- **RouterOS 7** accepts up to 4 294 967 295 seconds. The default is `520w`,
+  about ten years, which also sits below 536 870 911 seconds, above which
+  RouterOS displays a timeout as `0sec` even though it still tracks it. Staying
+  under that keeps `/ip firewall address-list print` readable.
+- **RouterOS 6** refuses anything beyond roughly 49 days — `2^32` milliseconds,
+  consistent with a 32-bit millisecond field. Measured on 6.49.20: `4w` is
+  accepted and `52w` is refused. It does not clamp the value, it rejects the
+  entry, so a v6 router given `520w` runs the scripts and holds nothing. The
+  default there is `4w`, and the generator refuses a longer one.
+
+The shorter v6 window is covered by drift detection rather than by the timeout:
+every sync carries the number of entries the router is holding, and a router
+that is caught up by cursor but holding fewer addresses than the server has is
+told to rebuild. Expiry, a manual flush and a half-finished rebuild all look the
+same from the changelog's point of view, and all are caught the same way.
 
 The timeout is a safety net, not the mechanism: the server is the source of
-truth and removals arrive within one poll interval. The long timeout only means
-a router cut off from the server keeps protecting itself.
+truth and removals arrive within one poll interval. The timeout only decides how
+long a router cut off from the server keeps protecting itself — ten years on
+RouterOS 7, four weeks on RouterOS 6.
 
 Because the list is volatile, the router's cursor must be volatile too — they
-have to be lost together or they disagree. So the cursor lives in a RouterOS
-`:global`, which is also RAM only. After a reboot both are gone, the sync script
-sees no cursor, and the bootstrap script rebuilds. No flag, no state file, no
-special case.
+have to be lost together or they disagree, and a cursor that outlived an empty
+list would leave the router believing it was up to date while protecting
+nothing.
+
+The cursor is held in a RouterOS `:global` and mirrored to an address-list
+marker that also carries a timeout. The global alone was the original design and
+it did not work: on the 6.49 router this was first deployed to, the global did
+not survive from one scheduled invocation to the next, so every poll saw no
+cursor and ran a full rebuild. The marker is the authoritative copy; the global
+is a cache. Both are RAM only, so a reboot clears them together with the list,
+the sync script sees no cursor, and the bootstrap script rebuilds. No flag, no
+state file, no special case.
 
 ## Corroboration
 

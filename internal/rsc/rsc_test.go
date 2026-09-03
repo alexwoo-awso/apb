@@ -3,6 +3,7 @@ package rsc
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alexwoo-awso/apb/internal/model"
 )
@@ -409,6 +410,7 @@ func TestReportMetadataHeadersAreV7Only(t *testing.T) {
 		d.ROSBranch = tc.branch
 		if tc.branch == "v6" {
 			d.VerifyCert = "no"
+			d.BlockTimeout = "4w"
 		}
 		b, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router"))
 		if err != nil {
@@ -509,6 +511,59 @@ func TestTimeoutIsWrittenAsALiteral(t *testing.T) {
 				t.Errorf("%s: an add with no timeout would land on flash: %.100s", name, window)
 			}
 			i = start + len("address-list add")
+		}
+	}
+}
+
+// RouterOS 6 refuses an address-list timeout beyond about 49 days, and it does
+// so per entry: the router accepts the script, runs it, and holds nothing. That
+// is the worst kind of failure, so it is refused at generation instead.
+//
+// Measured on 6.49.20: 4w accepted, 52w refused. The boundary is 2^32
+// milliseconds, consistent with a 32-bit millisecond field.
+func TestV6RejectsAnUnreachableTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		timeout string
+		v6ok    bool
+	}{
+		{"1d", true}, {"4w", true}, {"30d", true}, {"7w", true},
+		{"8w", false}, {"52w", false}, {"520w", false},
+	} {
+		d := testDevice()
+		d.ROSBranch = "v6"
+		d.VerifyCert = "no"
+		d.BlockTimeout = tc.timeout
+		_, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router"))
+		if (err == nil) != tc.v6ok {
+			t.Errorf("v6 timeout %s: accepted=%v, want %v (%v)", tc.timeout, err == nil, tc.v6ok, err)
+		}
+		// RouterOS 7 takes the long values that v6 cannot.
+		d.ROSBranch = "v7"
+		d.VerifyCert = "yes-without-crl"
+		if _, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")); err != nil {
+			t.Errorf("v7 timeout %s was rejected: %v", tc.timeout, err)
+		}
+	}
+}
+
+func TestParseROSDuration(t *testing.T) {
+	cases := map[string]time.Duration{
+		"1d":     24 * time.Hour,
+		"4w":     28 * 24 * time.Hour,
+		"520w":   520 * 7 * 24 * time.Hour,
+		"4w2d":   30 * 24 * time.Hour,
+		"12h":    12 * time.Hour,
+		"1w1d1h": (7*24 + 24 + 1) * time.Hour,
+	}
+	for in, want := range cases {
+		got, err := parseROSDuration(in)
+		if err != nil || got != want {
+			t.Errorf("%s: got %v %v, want %v", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "4", "w", "4x", "abc", "0s"} {
+		if _, err := parseROSDuration(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
 		}
 	}
 }

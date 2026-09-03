@@ -67,6 +67,12 @@ type Params struct {
 	Generated string
 }
 
+// v6TimeoutCeiling is the largest address-list timeout RouterOS 6 will accept.
+// Measured on 6.49.20: 4w is accepted, 52w is refused. The boundary sits at
+// 2^32 milliseconds, about 49.7 days, which is consistent with the field being
+// a 32-bit millisecond counter. RouterOS 7 accepts far larger values.
+const v6TimeoutCeiling = 49 * 24 * time.Hour
+
 var (
 	reIdent   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,30}$`)
 	reToken   = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
@@ -136,7 +142,16 @@ func (p *Params) validate() error {
 		}
 	}
 	if !reTime.MatchString(p.BlockTimeout) {
-		return fmt.Errorf("block timeout %q must look like 520w, 30d or 12h", p.BlockTimeout)
+		return fmt.Errorf("entry timeout %q must look like 4w, 30d or 12h", p.BlockTimeout)
+	}
+	d, err := parseROSDuration(p.BlockTimeout)
+	if err != nil {
+		return fmt.Errorf("entry timeout %q: %w", p.BlockTimeout, err)
+	}
+	if p.Branch == "v6" && d > v6TimeoutCeiling {
+		return fmt.Errorf("entry timeout %s is too long for RouterOS 6, which refuses anything "+
+			"beyond about 49 days: the router would reject every address and hold nothing. "+
+			"Use 4w, and rely on the server noticing the list has drifted", p.BlockTimeout)
 	}
 	if !reTime.MatchString(p.SentTimeout) {
 		return fmt.Errorf("reported-entry timeout %q must look like 1d", p.SentTimeout)
@@ -164,6 +179,41 @@ func (p *Params) validate() error {
 		return fmt.Errorf("fetch mode %q must be http or https", p.Mode)
 	}
 	return nil
+}
+
+// parseROSDuration reads a RouterOS time literal such as "4w2d" or "520w".
+func parseROSDuration(s string) (time.Duration, error) {
+	units := map[byte]time.Duration{
+		'w': 7 * 24 * time.Hour,
+		'd': 24 * time.Hour,
+		'h': time.Hour,
+		'm': time.Minute,
+		's': time.Second,
+	}
+	var total time.Duration
+	num := 0
+	seen := false
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c >= '0' && c <= '9':
+			num = num*10 + int(c-'0')
+			seen = true
+		default:
+			u, ok := units[c]
+			if !ok || !seen {
+				return 0, fmt.Errorf("unrecognised time unit %q", string(c))
+			}
+			total += time.Duration(num) * u
+			num, seen = 0, false
+		}
+	}
+	if seen {
+		return 0, fmt.Errorf("a number with no unit")
+	}
+	if total <= 0 {
+		return 0, fmt.Errorf("must be greater than zero")
+	}
+	return total, nil
 }
 
 // Bundle is the set of files the console offers for download.

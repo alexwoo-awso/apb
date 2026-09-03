@@ -41,9 +41,20 @@ That has three consequences worth knowing:
 3. Memory, not flash, is the limit. Budget roughly 100–150 bytes per entry:
    50 000 addresses is a few megabytes, comfortable even on a hEX-class device.
 
-`520w` is about ten years. It is chosen to sit below 536 870 911 seconds, above
-which RouterOS displays a timeout as `0sec` even though it still tracks it
-correctly — staying under keeps the list readable.
+**The usable timeout differs sharply between branches.** RouterOS 7 accepts up
+to 4 294 967 295 seconds and defaults to `520w`, about ten years, chosen to sit
+below 536 870 911 seconds so the list still prints a readable timeout rather
+than `0sec`.
+
+RouterOS 6 refuses anything beyond roughly 49 days, which is `2^32`
+milliseconds. Measured on 6.49.20: `4w` accepted, `52w` refused. It rejects the
+entry rather than clamping it, so a v6 router given `520w` imports the scripts,
+runs them, logs a successful rebuild and holds nothing at all. The default on v6
+is `4w` and the generator refuses more.
+
+Run `/system script run apb-test` to find your own build's ceiling: the write
+probes walk a ladder of timeouts and the largest one reporting `OK` is what to
+set as the entry timeout on the device page. Changing it needs no regeneration.
 
 ## How the router keeps its place
 
