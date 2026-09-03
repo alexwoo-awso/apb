@@ -23,7 +23,6 @@ func TestDumpBundle(t *testing.T) {
 		d.IPv6 = tc.ipv6
 		if tc.branch == "v6" {
 			d.VerifyCert = "no"
-			d.BlockTimeout = "4w"
 		}
 		b, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_SAMPLETOKENONLY000000", "apb-router"))
 		if err != nil {

@@ -76,18 +76,23 @@ it has a timeout. Entries with a timeout live in RAM and disappear on reboot.
 The original APB added entries without a timeout, so every blocked address was a
 flash write, which is what caused trouble on devices with small or worn storage.
 
-How long that timeout can be is branch-specific, and getting it wrong is not a
-soft failure:
+How long that timeout can be is limited on every branch, and getting it wrong is
+not a soft failure. RouterOS refuses the *entry* rather than clamping the value,
+so a router given too large a number runs the scripts, logs a clean rebuild and
+holds nothing.
 
-- **RouterOS 7** accepts up to 4 294 967 295 seconds. The default is `520w`,
-  about ten years, which also sits below 536 870 911 seconds, above which
-  RouterOS displays a timeout as `0sec` even though it still tracks it. Staying
-  under that keeps `/ip firewall address-list print` readable.
-- **RouterOS 6** refuses anything beyond roughly 49 days — `2^32` milliseconds,
-  consistent with a 32-bit millisecond field. Measured on 6.49.20: `4w` is
-  accepted and `52w` is refused. It does not clamp the value, it rejects the
-  entry, so a v6 router given `520w` runs the scripts and holds nothing. The
-  default there is `4w`, and the generator refuses a longer one.
+Measured on real hardware:
+
+| | 1d | 4w | 6w | 7w | 8w | 52w | 520w |
+|---|---|---|---|---|---|---|---|
+| 6.49.20 | ok | ok | | | | refused | refused |
+| 7.x | ok | ok | ok | ok | ok | refused | refused |
+
+The default is `4w` and the generator refuses more than `8w`. Two published
+figures do not survive contact with the hardware: the documented maximum of
+4 294 967 295 seconds, and the 536 870 911 second threshold above which a
+timeout displays as `0sec`. Neither describes this field. The value that matters
+is whatever `apb-test` reports on the router in front of you.
 
 The shorter v6 window is covered by drift detection rather than by the timeout:
 every sync carries the number of entries the router is holding, and a router
@@ -96,9 +101,9 @@ told to rebuild. Expiry, a manual flush and a half-finished rebuild all look the
 same from the changelog's point of view, and all are caught the same way.
 
 The timeout is a safety net, not the mechanism: the server is the source of
-truth and removals arrive within one poll interval. The timeout only decides how
-long a router cut off from the server keeps protecting itself — ten years on
-RouterOS 7, four weeks on RouterOS 6.
+truth and removals arrive within one poll interval. It only decides how long a
+router cut off from the server keeps protecting itself, which at four weeks is
+longer than any outage worth planning around.
 
 Because the list is volatile, the router's cursor must be volatile too — they
 have to be lost together or they disagree, and a cursor that outlived an empty

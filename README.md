@@ -36,19 +36,29 @@ flash unless it carries a timeout; entries *with* a timeout are held in memory
 and dropped on reboot. Everything APB adds carries a timeout, so a router
 accumulating a hundred thousand blocked addresses never touches its flash.
 
-How long a timeout depends on the branch, and the difference is not small:
+**How long that timeout can be is limited, on both branches.** RouterOS refuses
+a long address-list timeout, and it refuses the *entry* rather than clamping the
+value — so a router given too large a number imports the bundle, runs it,
+reports a clean rebuild, and holds nothing at all. Measured on real hardware:
 
-| | Default | Ceiling |
-|---|---|---|
-| RouterOS 7 | `520w`, about ten years | 4294967295 seconds |
-| RouterOS 6 | `4w` | about 49 days — `2^32` milliseconds |
+| | 1d | 4w | 6w | 7w | 8w | 52w | 520w |
+|---|---|---|---|---|---|---|---|
+| RouterOS 6.49.20 | ok | ok | | | | refused | refused |
+| RouterOS 7.x | ok | ok | ok | ok | ok | refused | refused |
 
-RouterOS 6 does not merely clamp a longer value, it **refuses the entry**, so a
-v6 router configured with `520w` accepts the scripts, runs them, and holds
-nothing at all. The generator rejects that combination rather than let it
-happen. The shorter v6 window is not a hole: the server compares what each
-router reports holding against what it should hold, and tells a router whose
-list has drifted to rebuild.
+The default is `4w`, which works everywhere tested; `8w` is the largest value
+observed to work anywhere, and the generator refuses more. Run
+`/system script run apb-test` on a router to find its own ceiling.
+
+MikroTik's documentation gives a maximum of 4294967295 seconds. That figure does
+not describe this field: a 7.x router refuses 52w. Trust the probe, not the
+manual — and not this table either, if your hardware disagrees with it.
+
+A four-week window is not a hole. The server compares what each router reports
+holding against what it should hold, and tells a router whose list has drifted
+to rebuild, so an expired entry is recovered exactly as a manual flush is. The
+timeout only governs how long a router *cut off from the server* keeps
+protecting itself.
 
 A reboot therefore leaves the router with an empty list and no cursor. That is
 the expected state, and the `apb-bootstrap` script detects it and rebuilds the
@@ -99,9 +109,11 @@ deployed to; the "already reported" marker is a third address list, also with a
 timeout. All of it is RAM only and all of it is lost on reboot, which is exactly
 when it should be.
 
-Everything except the server address and the token is fetched from
-`/api/v1/whoami` at run time, so changing a router's interval, list name or
-entry timeout in the console takes effect without regenerating anything.
+`/api/v1/whoami` reports a device's server-side configuration and `apb-test`
+prints it, but the operational scripts do not yet read it: the list names, the
+timeout and the intervals are baked in when the bundle is generated. **Changing
+any of them in the console requires regenerating and reinstalling the bundle.**
+Only which addresses are sent is decided by the server at run time.
 
 ## The protocol
 
@@ -119,7 +131,7 @@ POST /api/v1/report         body: 45.83.64.7,91.240.118.3
   → ok,2,2,2,0,0,48262
 
 GET /api/v1/whoami
-  → 1,edge-1,APB,APB_detect,520w,15,300,0,1,1,48260,51204
+  → 1,edge-1,APB,APB_detect,4w,15,300,0,1,1,48260,51204
 ```
 
 | Token | Meaning |

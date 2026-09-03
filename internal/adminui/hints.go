@@ -86,18 +86,20 @@ var hints = map[string]Hint{
 	"device": {
 		Key:   "device",
 		Title: "Device settings and scripts",
-		Body: `<p>Everything on this page is pushed to the router without regenerating its scripts: the
-			router asks the server for its configuration on each run. Only the address of this server and
-			the token itself are baked into the generated files.</p>
+		Body: `<p>The list names, the entry timeout and the intervals are written into the scripts when
+			a bundle is generated, so changing them here means generating and importing a new bundle.
+			Only which addresses the router receives is decided by the server at run time.</p>
 		<p><strong>Contributes</strong> lets the router upload what it detects. <strong>Receives</strong>
 			lets it download the shared list. A router can do either, both or neither.</p>`,
 	},
 	"scripts": {
 		Key:   "scripts",
 		Title: "Generating the RouterOS files",
-		Body: `<p>The bundle installs four scripts and three schedules. Blocklist entries are added with a
-			long timeout, which keeps them in RAM: nothing is ever written to the router's flash, and the
-			list is rebuilt automatically after a reboot.</p>
+		Body: `<p>The bundle installs five scripts and three schedules. Blocklist entries are added with a
+			timeout, which is what keeps them in RAM: nothing is ever written to the router's flash, and the
+			list is rebuilt automatically after a reboot. RouterOS refuses a timeout longer than a couple of
+			months and then holds nothing at all, so the default is four weeks; run
+			<code>apb-test</code> on a router to find its own ceiling.</p>
 		<p>Generating a bundle issues a fresh token that is embedded in the file. Previous tokens keep
 			working until you revoke them, so you can roll a router over without an outage.</p>`,
 		Steps: []string{
@@ -134,8 +136,9 @@ var hints = map[string]Hint{
 	"settings": {
 		Key:   "settings",
 		Title: "How these settings behave",
-		Body: `<p>Changes take effect immediately and reach the routers on their next poll; nothing here
-			requires regenerating scripts or restarting the service.</p>
+		Body: `<p>Changes take effect immediately on the server. The defaults for new routers, and the
+			entry timeout in particular, are written into a bundle when it is generated, so changing them
+			only affects routers whose bundles you generate afterwards.</p>
 		<p>The two corroboration settings are the important ones. Requiring reports from more than one
 			router before an address is broadcast trades a little speed for a much lower chance of blocking
 			something by accident.</p>`,

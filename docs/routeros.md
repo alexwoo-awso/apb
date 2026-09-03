@@ -41,20 +41,27 @@ That has three consequences worth knowing:
 3. Memory, not flash, is the limit. Budget roughly 100–150 bytes per entry:
    50 000 addresses is a few megabytes, comfortable even on a hEX-class device.
 
-**The usable timeout differs sharply between branches.** RouterOS 7 accepts up
-to 4 294 967 295 seconds and defaults to `520w`, about ten years, chosen to sit
-below 536 870 911 seconds so the list still prints a readable timeout rather
-than `0sec`.
+**The usable timeout is limited on every branch.** RouterOS refuses a long
+address-list timeout, and refuses the *entry* rather than clamping the value, so
+a router given too large a number imports the bundle, runs it, logs a successful
+rebuild and holds nothing at all.
 
-RouterOS 6 refuses anything beyond roughly 49 days, which is `2^32`
-milliseconds. Measured on 6.49.20: `4w` accepted, `52w` refused. It rejects the
-entry rather than clamping it, so a v6 router given `520w` imports the scripts,
-runs them, logs a successful rebuild and holds nothing at all. The default on v6
-is `4w` and the generator refuses more.
+Measured on real hardware:
+
+| | 1d | 4w | 6w | 7w | 8w | 52w | 520w |
+|---|---|---|---|---|---|---|---|
+| 6.49.20 | ok | ok | | | | refused | refused |
+| 7.x | ok | ok | ok | ok | ok | refused | refused |
+
+The default is `4w`, which worked on everything tested, and the generator
+refuses more than `8w`. MikroTik documents a maximum of 4 294 967 295 seconds;
+that figure does not describe this field, since a 7.x router refuses 52w.
 
 Run `/system script run apb-test` to find your own build's ceiling: the write
-probes walk a ladder of timeouts and the largest one reporting `OK` is what to
-set as the entry timeout on the device page. Changing it needs no regeneration.
+probes walk a ladder and the largest one reporting `OK` is what to set as the
+entry timeout on the device page. **Then regenerate the bundle** — the timeout
+is written into the scripts, so a console change alone does not reach a router
+that is already installed.
 
 ## How the router keeps its place
 

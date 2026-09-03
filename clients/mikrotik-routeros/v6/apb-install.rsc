@@ -1,5 +1,5 @@
 # APB scripts for "edge-1" (RouterOS v6)
-# Generated 2026-09-03 18:59:33Z by APB.
+# Generated 2026-09-03 19:24:43Z by APB.
 #
 # This file contains the API token for this router. Treat it as a password:
 # do not commit it, do not share it, and remove the file from the router once
@@ -150,6 +150,12 @@
 :set apbSrc ($apbSrc . "EFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
 :set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=1.2.3.4 timeout=8w ; :log info \"APB test: write M3, 8w: OK\" } on-error={ :log error \"APB test: write M3, 8w: R")
 :set apbSrc ($apbSrc . "EFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=1.2.3.4 timeout=12w ; :log info \"APB test: write M4, 12w: OK\" } on-error={ :log error \"APB test: write M4, 12w")
+:set apbSrc ($apbSrc . ": REFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=1.2.3.4 timeout=16w ; :log info \"APB test: write M5, 16w: OK\" } on-error={ :log error \"APB test: write M5, 16w")
+:set apbSrc ($apbSrc . ": REFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
+:set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=1.2.3.4 timeout=24w ; :log info \"APB test: write M6, 24w: OK\" } on-error={ :log error \"APB test: write M6, 24w")
+:set apbSrc ($apbSrc . ": REFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
 :set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=1.2.3.4 timeout=52w ; :log info \"APB test: write M, 52w: OK\" } on-error={ :log error \"APB test: write M, 52w: ")
 :set apbSrc ($apbSrc . "REFUSED\" }\r\n:do { /ip firewall address-list remove [find list=\$State] } on-error={}\r\n")
 :set apbSrc ($apbSrc . ":do { /ip firewall address-list add list=\$State address=1.2.3.4 timeout=520w ; :log info \"APB test: write N, 520w written literally: OK\" } on-error={ :log error \"APB ")

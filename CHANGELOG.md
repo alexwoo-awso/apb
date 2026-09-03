@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.1.1 — 2026-09-03
+
+**The address-list timeout ceiling is a RouterOS property, not a RouterOS 6
+one.** 2.1.0 shipped on the assumption that RouterOS 7 accepted the documented
+maximum of 4294967295 seconds and so could keep the ten-year default. A 7.x
+router refuses `52w` exactly as a 6.49 one does.
+
+Measured on real hardware:
+
+| | 1d | 4w | 6w | 7w | 8w | 52w | 520w |
+|---|---|---|---|---|---|---|---|
+| RouterOS 6.49.20 | ok | ok | | | | refused | refused |
+| RouterOS 7.x | ok | ok | ok | ok | ok | refused | refused |
+
+The `2^32` millisecond theory in 2.1.0 was also wrong: that predicts about 49.7
+days, and 8w is 56 days and works. No replacement theory is offered here. The
+generator caps at `8w`, the largest value observed to work anywhere, and
+`apb-test` walks a ladder up to 52w so an operator can measure their own build.
+
+### Changed
+
+- Every device defaults to a `4w` entry timeout, on both branches. The cap is no
+  longer conditioned on the RouterOS version.
+- **A ten-year expiry is not achievable on any RouterOS branch tested.** The
+  original brief asked for one; it cannot be delivered as specified, and the
+  documentation now says so instead of quoting a figure from the manual.
+
+### Fixed
+
+- **The documentation claimed changing a device's settings took effect without
+  regenerating its bundle. It does not.** No operational script consumes
+  `/api/v1/whoami`: the list names, the entry timeout and the intervals are
+  written into the scripts when a bundle is generated. Only which addresses a
+  router receives is decided at run time. The README, the API reference, the
+  RouterOS guide, the device page and two explainer cards all said otherwise.
+
 ## 2.1.0 — 2026-09-03
 
 **RouterOS 6 cannot hold a ten-year address-list timeout.** Measured on a

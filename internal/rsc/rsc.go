@@ -67,11 +67,29 @@ type Params struct {
 	Generated string
 }
 
-// v6TimeoutCeiling is the largest address-list timeout RouterOS 6 will accept.
-// Measured on 6.49.20: 4w is accepted, 52w is refused. The boundary sits at
-// 2^32 milliseconds, about 49.7 days, which is consistent with the field being
-// a 32-bit millisecond counter. RouterOS 7 accepts far larger values.
-const v6TimeoutCeiling = 49 * 24 * time.Hour
+// timeoutCeiling is the largest address-list timeout the generator will emit.
+//
+// RouterOS refuses a long timeout on an address-list entry, and it refuses the
+// entry rather than clamping the value, so a router given too large a number
+// runs the scripts, reports a clean rebuild and holds nothing at all. This is
+// not a version difference: both branches refuse it.
+//
+// Measured on real hardware:
+//
+//	RouterOS 6.49.20   1d ok  4w ok                       52w refused  520w refused
+//	RouterOS 7.x       1d ok  4w ok  6w ok  7w ok  8w ok  52w refused  520w refused
+//
+// 8w is therefore the largest value observed to work anywhere, and it is the
+// cap. The true boundary lies somewhere between 8w and 52w; apb-test walks a
+// ladder so an operator can find their own build's limit rather than trusting a
+// number in documentation, which is how the ten-year figure got in here.
+const timeoutCeiling = 8 * 7 * 24 * time.Hour
+
+// DefaultBlockTimeout is proven to work on every router tested. The length
+// barely matters in practice: the server notices when a list has drifted and
+// calls for a rebuild, so the timeout only governs how long a router cut off
+// from the server keeps protecting itself.
+const DefaultBlockTimeout = "4w"
 
 var (
 	reIdent   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,30}$`)
@@ -148,10 +166,11 @@ func (p *Params) validate() error {
 	if err != nil {
 		return fmt.Errorf("entry timeout %q: %w", p.BlockTimeout, err)
 	}
-	if p.Branch == "v6" && d > v6TimeoutCeiling {
-		return fmt.Errorf("entry timeout %s is too long for RouterOS 6, which refuses anything "+
-			"beyond about 49 days: the router would reject every address and hold nothing. "+
-			"Use 4w, and rely on the server noticing the list has drifted", p.BlockTimeout)
+	if d > timeoutCeiling {
+		return fmt.Errorf("entry timeout %s is longer than RouterOS accepts on an address-list "+
+			"entry: the router would refuse every address and hold nothing while still reporting "+
+			"a clean rebuild. 4w works on every router tested and 8w is the largest observed to "+
+			"work anywhere; run apb-test on the router to find its own ceiling", p.BlockTimeout)
 	}
 	if !reTime.MatchString(p.SentTimeout) {
 		return fmt.Errorf("reported-entry timeout %q must look like 1d", p.SentTimeout)

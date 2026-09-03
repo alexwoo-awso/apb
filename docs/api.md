@@ -183,7 +183,7 @@ what makes the console's device settings take effect without regenerating any
 scripts.
 
 ```
-1,edge-1,APB,APB_detect,520w,15,300,0,1,1,48260,51204
+1,edge-1,APB,APB_detect,4w,15,300,0,1,1,48260,51204
 ```
 
 | # | Field |

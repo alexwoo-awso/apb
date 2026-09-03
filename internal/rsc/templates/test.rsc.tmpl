@@ -59,6 +59,12 @@
 :do { /ip firewall address-list remove [find list=$State] } on-error={}
 :do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=8w ; :log info "APB test: write M3, 8w: OK" } on-error={ :log error "APB test: write M3, 8w: REFUSED" }
 :do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=12w ; :log info "APB test: write M4, 12w: OK" } on-error={ :log error "APB test: write M4, 12w: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=16w ; :log info "APB test: write M5, 16w: OK" } on-error={ :log error "APB test: write M5, 16w: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
+:do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=24w ; :log info "APB test: write M6, 24w: OK" } on-error={ :log error "APB test: write M6, 24w: REFUSED" }
+:do { /ip firewall address-list remove [find list=$State] } on-error={}
 :do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=52w ; :log info "APB test: write M, 52w: OK" } on-error={ :log error "APB test: write M, 52w: REFUSED" }
 :do { /ip firewall address-list remove [find list=$State] } on-error={}
 :do { /ip firewall address-list add list=$State address=1.2.3.4 timeout=520w ; :log info "APB test: write N, 520w written literally: OK" } on-error={ :log error "APB test: write N, 520w written literally: REFUSED" }

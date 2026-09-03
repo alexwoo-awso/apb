@@ -14,7 +14,7 @@ func testDevice() model.Device {
 		ROSBranch:      "v7",
 		ListName:       "APB",
 		DetectList:     "APB_detect",
-		BlockTimeout:   "520w",
+		BlockTimeout:   "4w",
 		VerifyCert:     "yes-without-crl",
 		SyncInterval:   15,
 		ReportInterval: 300,
@@ -410,7 +410,6 @@ func TestReportMetadataHeadersAreV7Only(t *testing.T) {
 		d.ROSBranch = tc.branch
 		if tc.branch == "v6" {
 			d.VerifyCert = "no"
-			d.BlockTimeout = "4w"
 		}
 		b, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router"))
 		if err != nil {
@@ -515,33 +514,30 @@ func TestTimeoutIsWrittenAsALiteral(t *testing.T) {
 	}
 }
 
-// RouterOS 6 refuses an address-list timeout beyond about 49 days, and it does
-// so per entry: the router accepts the script, runs it, and holds nothing. That
-// is the worst kind of failure, so it is refused at generation instead.
-//
-// Measured on 6.49.20: 4w accepted, 52w refused. The boundary is 2^32
-// milliseconds, consistent with a 32-bit millisecond field.
-func TestV6RejectsAnUnreachableTimeout(t *testing.T) {
+// RouterOS refuses a long address-list timeout, and refuses the entry rather
+// than clamping the value, so a router given too large a number runs the
+// scripts, reports a clean rebuild and holds nothing. Both branches do it: a
+// 7.x router refuses 52w exactly as a 6.49 one does, which is why this is not
+// conditioned on the branch.
+func TestTimeoutBeyondWhatRouterOSAcceptsIsRefused(t *testing.T) {
 	for _, tc := range []struct {
 		timeout string
-		v6ok    bool
+		ok      bool
 	}{
-		{"1d", true}, {"4w", true}, {"30d", true}, {"7w", true},
-		{"8w", false}, {"52w", false}, {"520w", false},
+		{"1d", true}, {"4w", true}, {"30d", true}, {"7w", true}, {"8w", true},
+		{"9w", false}, {"52w", false}, {"520w", false},
 	} {
-		d := testDevice()
-		d.ROSBranch = "v6"
-		d.VerifyCert = "no"
-		d.BlockTimeout = tc.timeout
-		_, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router"))
-		if (err == nil) != tc.v6ok {
-			t.Errorf("v6 timeout %s: accepted=%v, want %v (%v)", tc.timeout, err == nil, tc.v6ok, err)
-		}
-		// RouterOS 7 takes the long values that v6 cannot.
-		d.ROSBranch = "v7"
-		d.VerifyCert = "yes-without-crl"
-		if _, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")); err != nil {
-			t.Errorf("v7 timeout %s was rejected: %v", tc.timeout, err)
+		for _, branch := range []string{"v6", "v7"} {
+			d := testDevice()
+			d.ROSBranch = branch
+			d.BlockTimeout = tc.timeout
+			if branch == "v6" {
+				d.VerifyCert = "no"
+			}
+			_, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router"))
+			if (err == nil) != tc.ok {
+				t.Errorf("%s timeout %s: accepted=%v, want %v (%v)", branch, tc.timeout, err == nil, tc.ok, err)
+			}
 		}
 	}
 }

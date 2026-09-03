@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alexwoo-awso/apb/internal/model"
+	"github.com/alexwoo-awso/apb/internal/rsc"
 )
 
 const deviceCols = `id, name, identity, description, ros_branch, ros_version, model, enabled,
@@ -300,17 +301,13 @@ func (db *DB) TokenByID(ctx context.Context, id int64) (model.DeviceToken, error
 	return t, err
 }
 
-// defaultBlockTimeout keeps a new device inside what its RouterOS branch will
-// accept. RouterOS 6 refuses an address-list timeout beyond about 49 days and
-// then holds nothing at all, so a v6 device cannot take the ten-year value that
-// suits v7. Four weeks is measured-good on 6.49, and the server notices when a
-// list has drifted, so the shorter window heals itself.
+// defaultBlockTimeout keeps a new device inside what RouterOS will accept on an
+// address-list entry. Both branches refuse a long timeout, and both refuse the
+// entry rather than clamping it, so a router given too large a value holds
+// nothing while reporting success. Four weeks works on every router tested.
 func defaultBlockTimeout(branch, configured string) string {
-	if branch == "v6" {
-		return "4w"
-	}
 	if configured == "" {
-		return "520w"
+		return rsc.DefaultBlockTimeout
 	}
 	return configured
 }
