@@ -11,7 +11,7 @@
 :local MaxPages {{.MaxPages}}
 :global apbCursor
 :global apbBootLock
-:local Hdr ("Authorization: Bearer " . $Token . ",user-agent: " . $UA . ",X-Apb-Agent: " . $UA)
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
 :local Now [/system resource get uptime]
 :local Run true
 :if ([:typeof $apbBootLock] = "time") do={ :if (($Now - $apbBootLock) < 30m) do={ :set Run false } }
@@ -26,8 +26,8 @@
 :local Started false
 :do {
 :set Page ($Page + 1)
-:local U ($Url . "/full")
-:if ($Next > 0) do={ :set U ($U . "?a=" . $Next) }
+:local U ($Url . "/full?k=" . $UA)
+:if ($Next > 0) do={ :set U ($U . "&a=" . $Next) }
 :set Next 0
 :local Res ""
 :do { :set Res [/tool fetch url=$U http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :set Failed true ; :log warning ("APB: rebuild could not reach " . $U . " - check DNS, routing and the certificate setting") }

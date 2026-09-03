@@ -13,28 +13,38 @@ func TestAgentMatches(t *testing.T) {
 		name      string
 		agents    []string
 		dedicated string
+		query     string
 		want      string
 		ok        bool
 	}{
-		{"exact match", []string{"apb-router"}, "", "apb-router", true},
-		{"different value", []string{"curl/8.5.0"}, "", "apb-router", false},
-		{"no header at all", nil, "", "apb-router", false},
-		{"empty header value", []string{""}, "", "apb-router", false},
-		{"case differs", []string{"APB-Router"}, "", "apb-router", false},
-		{"substring is not a match", []string{"apb-router/2"}, "", "apb-router", false},
+		{"exact match", []string{"apb-router"}, "", "", "apb-router", true},
+		{"different value", []string{"curl/8.5.0"}, "", "", "apb-router", false},
+		{"no header at all", nil, "", "", "apb-router", false},
+		{"empty header value", []string{""}, "", "", "apb-router", false},
+		{"case differs", []string{"APB-Router"}, "", "", "apb-router", false},
+		{"substring is not a match", []string{"apb-router/2"}, "", "", "apb-router", false},
 		// A client may append its own identity alongside the one a script asked
 		// for. Rejecting a header it did send would be wrong.
-		{"present among several", []string{"MikroTik/6.49.20", "apb-router"}, "", "apb-router", true},
-		{"absent among several", []string{"MikroTik/6.49.20", "something"}, "", "apb-router", false},
+		{"present among several", []string{"MikroTik/6.49.20", "apb-router"}, "", "", "apb-router", true},
+		{"absent among several", []string{"MikroTik/6.49.20", "something"}, "", "", "apb-router", false},
 		// RouterOS sends its own User-Agent regardless of what a script asks
 		// for, so the dedicated header is the channel that actually works.
-		{"dedicated header carries it", []string{"Mikrotik/6.x Fetch"}, "apb-router", "apb-router", true},
-		{"dedicated header wrong", []string{"Mikrotik/6.x Fetch"}, "something", "apb-router", false},
-		{"dedicated header alone", nil, "apb-router", "apb-router", true},
+		{"dedicated header carries it", []string{"Mikrotik/6.x Fetch"}, "apb-router", "", "apb-router", true},
+		{"dedicated header wrong", []string{"Mikrotik/6.x Fetch"}, "something", "", "apb-router", false},
+		{"dedicated header alone", nil, "apb-router", "", "apb-router", true},
+		// The query parameter is the channel the generated scripts use, because
+		// it is the only one RouterOS cannot take away from a script.
+		{"query carries it", []string{"Mikrotik/6.x Fetch"}, "", "apb-router", "apb-router", true},
+		{"query alone", nil, "", "apb-router", "apb-router", true},
+		{"query wrong", nil, "", "something", "apb-router", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := http.NewRequest(http.MethodGet, "http://example.org/", nil)
+			target := "http://example.org/"
+			if tc.query != "" {
+				target += "?k=" + tc.query
+			}
+			r, err := http.NewRequest(http.MethodGet, target, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

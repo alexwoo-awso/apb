@@ -13,6 +13,14 @@ import (
 // perform a full resynchronisation.
 const metaFloorKey = "_changes_floor"
 
+// Response budgeting. Each address on the wire costs its own length plus a
+// one-character operation marker and a separator; the cursor, the "more" flag
+// and the page marker share a fixed allowance at the front.
+const (
+	entryOverhead = 2
+	tokenOverhead = 32
+)
+
 func emitChange(ctx context.Context, t *sql.Tx, op, ip string, family int, at int64) error {
 	_, err := t.ExecContext(ctx,
 		`INSERT INTO changes(op, ip, family, at) VALUES(?, ?, ?, ?)`, op, ip, family, at)
@@ -114,6 +122,14 @@ func (db *DB) ChangesSince(ctx context.Context, cursor int64, maxBytes int) (Del
 	if maxBytes <= 0 {
 		maxBytes = 8192
 	}
+	// The budget is the whole response, not just the address text: each entry
+	// also costs its "+" or "-" marker and a separator, and the cursor token
+	// sits in front. Undercounting here is how a raised setting would quietly
+	// exceed what /tool fetch will hand back to a script.
+	maxBytes -= tokenOverhead
+	if maxBytes < 64 {
+		maxBytes = 64
+	}
 	// Address text averages ~14 bytes; over-fetch a little then trim by budget.
 	limit := maxBytes/8 + 16
 	rows, err := db.ro.QueryContext(ctx,
@@ -138,11 +154,11 @@ func (db *DB) ChangesSince(ctx context.Context, cursor int64, maxBytes int) (Del
 			return d, err
 		}
 		if _, seen := final[ip]; !seen {
-			if used+int64(len(ip))+1 > int64(maxBytes) {
+			if used+int64(len(ip))+entryOverhead > int64(maxBytes) {
 				d.More = true
 				break
 			}
-			used += int64(len(ip)) + 1
+			used += int64(len(ip)) + entryOverhead
 			order = append(order, ip)
 		}
 		final[ip] = entry{op: op, seq: seq}
@@ -177,6 +193,10 @@ func (db *DB) SnapshotPage(ctx context.Context, afterID int64, maxBytes int, ipv
 	if maxBytes <= 0 {
 		maxBytes = 8192
 	}
+	maxBytes -= tokenOverhead
+	if maxBytes < 64 {
+		maxBytes = 64
+	}
 	q := `SELECT id, ip FROM addresses WHERE state = 'blocked' AND id > ?`
 	if !ipv6 {
 		q += ` AND family = 4`
@@ -195,11 +215,11 @@ func (db *DB) SnapshotPage(ctx context.Context, afterID int64, maxBytes int, ipv
 		if err := rows.Scan(&id, &ip); err != nil {
 			return nil, 0, false, err
 		}
-		if used+len(ip)+1 > maxBytes {
+		if used+len(ip)+entryOverhead > maxBytes {
 			more = true
 			break
 		}
-		used += len(ip) + 1
+		used += len(ip) + entryOverhead
 		ips = append(ips, ip)
 		nextID = id
 	}

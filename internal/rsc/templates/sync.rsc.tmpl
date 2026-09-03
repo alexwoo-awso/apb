@@ -10,7 +10,7 @@
 :local MaxLoops {{.MaxLoops}}
 :global apbCursor
 :global apbLock
-:local Hdr ("Authorization: Bearer " . $Token . ",user-agent: " . $UA . ",X-Apb-Agent: " . $UA)
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
 :local Now [/system resource get uptime]
 :local Run true
 :if ([:typeof $apbLock] = "time") do={ :if (($Now - $apbLock) < 3m) do={ :set Run false } }
@@ -28,7 +28,7 @@
 :set Loops ($Loops + 1)
 :local Held [:len [/ip firewall address-list find list=$List]]
 :local Res ""
-:do { :set Res [/tool fetch url=($Url . "/sync?c=" . $apbCursor . "&n=" . $Held) http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :log warning ("APB: sync could not reach " . $Url . " - run apb-test for detail") }
+:do { :set Res [/tool fetch url=($Url . "/sync?k=" . $UA . "&c=" . $apbCursor . "&n=" . $Held) http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :log warning ("APB: sync could not reach " . $Url . " - run apb-test for detail") }
 :if ([:typeof $Res] = "array") do={
 :if (($Res->"status") = "finished") do={
 :local Next -1

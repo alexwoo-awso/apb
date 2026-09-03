@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.0.5 — 2026-09-03
+
+### Fixed
+
+- **Adding a custom header stopped RouterOS 6 making the request at all.** The
+  `X-Apb-Agent` header introduced in 2.0.4 made `/tool fetch` fail before it
+  left the router, so requests that previously arrived and were merely rejected
+  stopped arriving entirely. The client identity now travels in the query
+  string, which the script composes as part of the URL and no HTTP client can
+  interfere with, and the generated scripts are back to the two headers proven
+  to reach the server: `Authorization` and `User-Agent`.
+- The server accepts the identity from the `k` query parameter, the
+  `X-Apb-Agent` header, or any `User-Agent`, so a client that can set headers
+  freely is not forced to use a URL.
+- **The response budget undercounted.** `max_sync_bytes` was applied to address
+  text only, ignoring each entry's operation marker and separator, so a page
+  measured 8911 bytes against a stated 8192. Harmless at the default, but a
+  raised setting would have crept toward the size at which `/tool fetch`
+  silently truncates. The budget now covers the whole response.
+- Report metadata headers are sent only on RouterOS 7, since custom headers are
+  what broke the fetch on 6.
+
+### Changed
+
+- The client identity must now be letters, digits, dot, dash or underscore: it
+  appears in a URL and RouterOS cannot percent-encode. Generation fails with an
+  explanation rather than producing corrupted requests.
+- `apb-test` now probes four header shapes and logs which ones this RouterOS
+  build accepts, so a header problem is measured rather than guessed at.
+
+**Regenerate and reinstall any bundle produced before this release.**
+
 ## 2.0.4 — 2026-09-03
 
 ### Fixed

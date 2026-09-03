@@ -46,10 +46,15 @@ Unknown, revoked, expired and disabled-device tokens all produce the same
 `401`, so probing cannot tell them apart.
 
 If `require_user_agent` is set under Settings, requests must also identify
-themselves with that exact value, in the `X-Apb-Agent` header the generated
-scripts send or in any `User-Agent`. The dedicated header exists because
-RouterOS sets its own `User-Agent` and does not reliably let a script override
-it — a v6 router sends `Mikrotik/6.x Fetch` whatever the script asks for.
+themselves with that exact value, in the `k` query parameter, the `X-Apb-Agent`
+header, or any `User-Agent`.
+
+The generated scripts use the query parameter, because it is the only channel
+RouterOS cannot take away from a script: RouterOS sets its own `User-Agent` and
+ignores a script's attempt to override it, and adding a custom header made
+`/tool fetch` on RouterOS 6 fail before the request left the router. A URL the
+script composes itself has neither problem. The value must therefore be
+URL-safe: letters, digits, dot, dash and underscore.
 
 It is a noise filter, not a control: it keeps background internet scanning out
 of the logs before the token is even checked, and it travels in clear text in

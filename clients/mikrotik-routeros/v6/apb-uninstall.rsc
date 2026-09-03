@@ -1,5 +1,5 @@
 # APB uninstall for "edge-1" (RouterOS v6)
-# Generated 2026-09-03 17:45:29Z by APB.
+# Generated 2026-09-03 18:05:00Z by APB.
 #
 # Import with:  /import file-name=<this file>
 :do { /system script run apb-purge } on-error={ :log warning "APB: purge failed" }

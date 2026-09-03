@@ -335,3 +335,87 @@ func TestBundleShipsAConnectivityTest(t *testing.T) {
 		t.Error("the connectivity test should not be scheduled")
 	}
 }
+
+// The client identity travels in the query string. Headers were the wrong
+// place: RouterOS sets User-Agent itself, and adding a custom header made
+// /tool fetch fail outright on RouterOS 6, so a request that used to arrive
+// stopped arriving at all. A URL the script composes cannot be interfered with.
+func TestIdentityTravelsInTheQueryString(t *testing.T) {
+	d := testDevice()
+	p := FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "mrhyde")
+	b, err := Generate(p)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body := unwrap(b.Install)
+
+	for _, want := range []string{
+		`"/sync?k=" . $UA`,
+		`"/full?k=" . $UA`,
+		`"/report?k=" . $UA`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no identity in the URL for %s", want)
+		}
+	}
+	// Page two of a rebuild must extend the query, not start a new one.
+	if !strings.Contains(body, `$U . "&a=" . $Next`) {
+		t.Error("the rebuild page marker would start a second query string")
+	}
+	// Only the two headers that provably reach the server. The connectivity
+	// probe is exempt: sending a custom header is the whole point of it, and it
+	// only ever runs by hand.
+	for _, name := range []string{"sync.rsc.tmpl", "bootstrap.rsc.tmpl", "report.rsc.tmpl"} {
+		script, err := render(name, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(script, "X-Apb-Agent") {
+			t.Errorf("%s carries a custom header; RouterOS 6 refuses the fetch", name)
+		}
+	}
+	if n := strings.Count(body, `:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)`); n < 4 {
+		t.Errorf("expected the two-header form in every script, found %d", n)
+	}
+}
+
+// RouterOS 6 cannot percent-encode, so an identity that is not URL-safe would
+// silently corrupt every request rather than failing loudly at generation.
+func TestIdentityMustBeURLSafe(t *testing.T) {
+	for _, bad := range []string{"My Agent", "agent/1.0", "a?b", "a&b", "a=b", ""} {
+		_, err := Generate(FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", bad))
+		if err == nil && bad != "" {
+			t.Errorf("identity %q was accepted", bad)
+		}
+	}
+	// Empty falls back to the default, which is safe.
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "")
+	if p.UserAgent != "apb-router" {
+		t.Errorf("empty identity should default, got %q", p.UserAgent)
+	}
+	if _, err := Generate(p); err != nil {
+		t.Errorf("default identity rejected: %v", err)
+	}
+}
+
+// RouterOS 6 refused the fetch when a custom header was present, so the report
+// metadata headers are v7 only.
+func TestReportMetadataHeadersAreV7Only(t *testing.T) {
+	for _, tc := range []struct {
+		branch string
+		want   bool
+	}{{"v7", true}, {"v6", false}} {
+		d := testDevice()
+		d.ROSBranch = tc.branch
+		if tc.branch == "v6" {
+			d.VerifyCert = "no"
+		}
+		b, err := Generate(FromDevice(d, "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router"))
+		if err != nil {
+			t.Fatalf("%s: %v", tc.branch, err)
+		}
+		if got := strings.Contains(unwrap(b.Install), "X-Apb-Identity"); got != tc.want {
+			t.Errorf("%s: metadata headers present=%v, want %v", tc.branch, got, tc.want)
+		}
+	}
+}

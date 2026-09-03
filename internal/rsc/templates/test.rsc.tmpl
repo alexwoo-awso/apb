@@ -2,21 +2,38 @@
 # Run it by hand and read the log:
 #   /system script run {{.Prefix}}test
 #   /log print where message~"APB test"
-# It performs exactly one call and reports what came back, so a router that is
-# not syncing can be diagnosed without guessing.
+#
+# It makes one call the way the real scripts do, then probes four header shapes
+# to show which ones this RouterOS build actually accepts. RouterOS sets some
+# headers itself and rejects the whole fetch for others, and the failure is
+# indistinguishable from a network problem, so this measures it rather than
+# assuming.
 :local Url "{{.BaseURL}}/api/v1"
 :local Token "{{.Token}}"
 :local UA "{{.UserAgent}}"
-:local Hdr ("Authorization: Bearer " . $Token . ",user-agent: " . $UA . ",X-Apb-Agent: " . $UA)
+:local Auth ("Authorization: Bearer " . $Token)
+:local Hdr ("Authorization: Bearer " . $Token . ",User-Agent: " . $UA)
+:local Target ($Url . "/whoami?k=" . $UA)
 :local Res ""
-:log info ("APB test: GET " . $Url . "/whoami as {{.Mode}}, certificate check {{.VerifyCert}}")
-:do { :set Res [/tool fetch url=($Url . "/whoami") http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :log error "APB test: fetch raised an error. The usual causes are a name that does not resolve, no route to the server, or a certificate the router will not accept." }
+
+:log info ("APB test: calling " . $Target . " as {{.Mode}}, certificate check {{.VerifyCert}}")
+:do { :set Res [/tool fetch url=$Target http-method=get http-header-field=$Hdr {{template "fetchopts" .}} output=user as-value] } on-error={ :log error "APB test: the real request failed. Causes in order of likelihood: the name does not resolve, there is no route to the server, or the certificate is rejected." }
 :if ([:typeof $Res] = "array") do={
 :log info ("APB test: status " . ($Res->"status"))
 :log info ("APB test: reply " . ($Res->"data"))
 :if (($Res->"status") = "finished") do={
-:if ([:pick ($Res->"data") 0 2] = "1,") do={ :log info "APB test: the server answered correctly, this router is configured and authorised" } else={ :log error "APB test: the server answered but not with a configuration line, so the token is probably wrong or revoked" }
+:if ([:pick ($Res->"data") 0 2] = "1,") do={ :log info "APB test: PASS - the server answered with this device's configuration, so the address, the token and the identity are all correct" } else={ :log error "APB test: the server replied but not with a configuration line, so the token is wrong or revoked" }
 }
 } else={
-:log error "APB test: no reply at all. Nothing reached the server."
+:log error "APB test: nothing came back at all"
 }
+
+# Header shape probe. Each variant is the same request with a different header
+# set; a failure here means RouterOS refused to build the request, not that the
+# server said no.
+:local Probe ""
+:do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=$Auth {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe A, authorization only: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe A, authorization only: REFUSED by RouterOS" }
+:do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",User-Agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe B, capitalised User-Agent: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe B, capitalised User-Agent: REFUSED by RouterOS" }
+:do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",user-agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe C, lowercase user-agent: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe C, lowercase user-agent: REFUSED by RouterOS" }
+:do { :set Probe [/tool fetch url=$Target http-method=get http-header-field=($Auth . ",X-Apb-Agent: " . $UA) {{template "fetchopts" .}} output=user as-value] ; :log info ("APB test: probe D, custom X- header: " . ($Probe->"status")) } on-error={ :log warning "APB test: probe D, custom X- header: REFUSED by RouterOS" }
+:log info "APB test: done. The identity travels in the URL, so a REFUSED probe costs nothing; it only records what this build tolerates."

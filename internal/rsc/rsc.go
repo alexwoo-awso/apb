@@ -67,7 +67,7 @@ var (
 	reToken   = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 	reTime    = regexp.MustCompile(`^(\d+[wdhms])+$`)
 	reURL     = regexp.MustCompile(`^https?://[A-Za-z0-9._-]+(:\d{1,5})?(/[A-Za-z0-9._~/-]*)?$`)
-	reUA      = regexp.MustCompile(`^[A-Za-z0-9._/ -]{1,64}$`)
+	reUA      = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 	verifyOpt = map[string]bool{"yes": true, "yes-without-crl": true, "no": true}
 )
 
@@ -136,7 +136,8 @@ func (p *Params) validate() error {
 		return fmt.Errorf("reported-entry timeout %q must look like 1d", p.SentTimeout)
 	}
 	if !reUA.MatchString(p.UserAgent) {
-		return fmt.Errorf("user agent %q contains characters that cannot be put in a header", p.UserAgent)
+		return fmt.Errorf("client identity %q must be letters, digits, dot, dash or underscore: "+
+			"it travels in the request URL, and RouterOS cannot percent-encode", p.UserAgent)
 	}
 	if !verifyOpt[p.VerifyCert] {
 		return fmt.Errorf("certificate check %q must be yes, yes-without-crl or no", p.VerifyCert)
