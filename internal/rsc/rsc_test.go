@@ -168,3 +168,118 @@ func TestV4OnlyDeviceGetsNoIPv6Commands(t *testing.T) {
 		t.Error("IPv6 device did not receive IPv6 commands")
 	}
 }
+
+// The generated file must contain no line continuations. MikroTik's own export
+// format wraps long strings with a trailing backslash, which breaks in two ways
+// this generator cannot control: the router strips leading whitespace on the
+// continuation line, silently eating a space that belongs to the script, and a
+// file converted to CRLF anywhere in transit puts a carriage return after the
+// backslash so the line stops continuing at all. Both produce an import that
+// fails or, worse, one that succeeds with a corrupted script.
+func TestGeneratedFilesHaveNoLineContinuations(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	b, err := Generate(p)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for name, body := range map[string]string{
+		"scripts": b.Scripts, "scheduler": b.Scheduler,
+		"install": b.Install, "uninstall": b.Uninstall, "firewall": b.Firewall,
+	} {
+		for i, line := range strings.Split(body, "\n") {
+			if strings.HasSuffix(line, `\`) {
+				t.Errorf("%s line %d ends with a continuation backslash: %.80s", name, i+1, line)
+			}
+			if len(line) > 400 {
+				t.Errorf("%s line %d is %d characters long", name, i+1, len(line))
+			}
+		}
+	}
+}
+
+// Every line must survive a round trip through CRLF, which is what happens when
+// the file is downloaded on Windows or opened in an editor before being sent to
+// the router.
+func TestInstallSurvivesCRLFConversion(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	b, err := Generate(p)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	crlf := strings.ReplaceAll(b.Install, "\n", "\r\n")
+	got := assembleSource(t, crlf, "apb-sync")
+	want := assembleSource(t, b.Install, "apb-sync")
+	if got != want {
+		t.Error("the assembled script differs after CRLF conversion")
+	}
+	if !strings.Contains(want, `:local Hdr ("Authorization: Bearer "`) {
+		t.Errorf("assembled script lost its spacing:\n%.400s", want)
+	}
+}
+
+// TestAssembledSourceMatchesTheTemplate proves the pieces the .rsc appends
+// reconstruct the script body exactly, so a bug in chunking or escaping cannot
+// ship a subtly different script than the one under test.
+func TestAssembledSourceMatchesTheTemplate(t *testing.T) {
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	b, err := Generate(p)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, tc := range []struct{ script, template string }{
+		{"apb-sync", "sync.rsc.tmpl"},
+		{"apb-bootstrap", "bootstrap.rsc.tmpl"},
+		{"apb-report", "report.rsc.tmpl"},
+		{"apb-purge", "purge.rsc.tmpl"},
+	} {
+		want, err := render(tc.template, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := assembleSource(t, b.Install, tc.script)
+		if got != strings.ReplaceAll(want, "\r\n", "\n") {
+			t.Errorf("%s: assembled source does not match the template", tc.script)
+		}
+	}
+}
+
+// assembleSource replays the ":set apbSrc ($apbSrc . \"...\")" lines belonging
+// to one script, exactly as RouterOS would, and unescapes the result.
+func assembleSource(t *testing.T, rsc, script string) string {
+	t.Helper()
+	var b strings.Builder
+	inSection := false
+	for _, line := range strings.Split(strings.ReplaceAll(rsc, "\r\n", "\n"), "\n") {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case strings.HasPrefix(line, "# --- "+script+":"):
+			inSection = true
+		case strings.HasPrefix(line, "# --- "):
+			inSection = false
+		case inSection && strings.HasPrefix(line, `:set apbSrc ($apbSrc . "`):
+			chunk := strings.TrimSuffix(strings.TrimPrefix(line, `:set apbSrc ($apbSrc . "`), `")`)
+			b.WriteString(chunk)
+		}
+	}
+	return unescapeRSC(b.String())
+}
+
+func unescapeRSC(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) {
+			b.WriteByte(s[i])
+			continue
+		}
+		i++
+		switch s[i] {
+		case 'r':
+			// The script uses CRLF; the template side uses LF.
+		case 'n':
+			b.WriteByte('\n')
+		default:
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}

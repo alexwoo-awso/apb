@@ -513,6 +513,13 @@ func TestScriptBundleDownloadIssuesAToken(t *testing.T) {
 	if !strings.Contains(body, "timeout=") {
 		t.Error("the bundle adds address-list entries without a timeout, which would write them to flash")
 	}
+	// A backslash-continued line breaks on any router that receives the file with
+	// CRLF endings, which is how the first field attempt failed.
+	for i, line := range strings.Split(body, "\n") {
+		if strings.HasSuffix(strings.TrimRight(line, "\r"), `\`) {
+			t.Fatalf("served bundle line %d ends with a continuation backslash: %.80s", i+1, line)
+		}
+	}
 	after, _ := h.db.ListTokens(t.Context(), h.device.ID)
 	if len(after) != len(before)+1 {
 		t.Errorf("expected one new token, had %d now %d", len(before), len(after))

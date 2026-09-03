@@ -192,25 +192,26 @@ func Generate(p Params) (Bundle, error) {
 
 	var scriptSection strings.Builder
 	scriptSection.WriteString(header(p, "scripts", true))
-	scriptSection.WriteString(":do { /system script remove [find name~\"^" + p.Prefix + "\"] } on-error={}\n")
+	scriptSection.WriteString(assemblerPreamble)
 	for _, s := range scripts {
-		fmt.Fprintf(&scriptSection,
-			"/system script add name=\"%s\" policy=%s dont-require-permissions=no comment=\"APB: %s\" source=\"%s\"\n",
-			s.name, p.Policy, s.desc, wrapEscaped(escapeSource(s.body), 96))
+		writeScript(&scriptSection, p, s.name, s.desc, s.body)
 	}
+	scriptSection.WriteString("\n:set apbSrc \"\"\n")
 
 	var schedSection strings.Builder
 	schedSection.WriteString(header(p, "scheduler", false))
-	schedSection.WriteString(":do { /system scheduler remove [find name~\"^" + p.Prefix + "\"] } on-error={}\n")
-	fmt.Fprintf(&schedSection,
-		"/system scheduler add name=\"%ssync\" interval=%ds start-time=startup policy=%s comment=\"APB: poll for changes\" on-event=\"/system script run %ssync\"\n",
-		p.Prefix, p.SyncInterval, p.Policy, p.Prefix)
-	fmt.Fprintf(&schedSection,
-		"/system scheduler add name=\"%sreport\" interval=%ds start-time=startup policy=%s comment=\"APB: upload detections\" on-event=\"/system script run %sreport\"\n",
-		p.Prefix, p.ReportInterval, p.Policy, p.Prefix)
-	fmt.Fprintf(&schedSection,
-		"/system scheduler add name=\"%sboot\" interval=0 start-time=startup policy=%s comment=\"APB: rebuild the RAM-held list after a reboot\" on-event=\"/system script run %sbootstrap\"\n",
-		p.Prefix, p.Policy, p.Prefix)
+	for _, s := range []struct {
+		name, interval, desc, run string
+	}{
+		{p.Prefix + "sync", fmt.Sprintf("%ds", p.SyncInterval), "poll for changes", p.Prefix + "sync"},
+		{p.Prefix + "report", fmt.Sprintf("%ds", p.ReportInterval), "upload detections", p.Prefix + "report"},
+		{p.Prefix + "boot", "0", "rebuild the RAM-held list after a reboot", p.Prefix + "bootstrap"},
+	} {
+		fmt.Fprintf(&schedSection, "%s\n", removeLine("/system scheduler", s.name))
+		fmt.Fprintf(&schedSection,
+			"/system scheduler add name=\"%s\" interval=%s start-time=startup policy=%s comment=\"APB: %s\" on-event=\"/system script run %s\"\n",
+			s.name, s.interval, p.Policy, s.desc, s.run)
+	}
 
 	install := scriptSection.String() + "\n" + strings.TrimPrefix(schedSection.String(), header(p, "scheduler", false)) +
 		"\n# Build the list immediately instead of waiting for the first schedule.\n" +
@@ -218,9 +219,13 @@ func Generate(p Params) (Bundle, error) {
 
 	var uninstall strings.Builder
 	uninstall.WriteString(header(p, "uninstall", false))
-	fmt.Fprintf(&uninstall, ":do { /system script run %spurge } on-error={}\n", p.Prefix)
-	fmt.Fprintf(&uninstall, ":do { /system scheduler remove [find name~\"^%s\"] } on-error={}\n", p.Prefix)
-	fmt.Fprintf(&uninstall, ":do { /system script remove [find name~\"^%s\"] } on-error={}\n", p.Prefix)
+	fmt.Fprintf(&uninstall, ":do { /system script run %spurge } on-error={ :log warning \"APB: purge failed\" }\n", p.Prefix)
+	for _, n := range []string{p.Prefix + "sync", p.Prefix + "report", p.Prefix + "boot"} {
+		fmt.Fprintf(&uninstall, "%s\n", removeLine("/system scheduler", n))
+	}
+	for _, s := range scripts {
+		fmt.Fprintf(&uninstall, "%s\n", removeLine("/system script", s.name))
+	}
 	uninstall.WriteString(":log info \"APB: removed\"\n")
 
 	firewall, err := render("firewall.rsc.tmpl", p)
@@ -263,6 +268,81 @@ func header(p Params, kind string, secret bool) string {
 `
 }
 
+// maxChunk caps how much escaped script text goes on one physical line of the
+// generated file. It is a readability and safety margin, not a hard RouterOS
+// limit; anything comfortably under a few hundred characters is safe to import.
+const maxChunk = 170
+
+const assemblerPreamble = `#
+# The script bodies below are assembled one piece at a time into a variable and
+# then installed. That is deliberately more verbose than the single quoted
+# string RouterOS itself exports, and it is what makes this file safe to move
+# between machines: there are no line continuations, so a file converted to
+# CRLF on the way here still imports correctly.
+#
+:global apbSrc
+`
+
+// removeLine emits an idempotent removal for one named item. RouterOS errors
+// on a removal that matches nothing in some versions, and an error inside
+// /import aborts the whole file, so each one is guarded.
+func removeLine(path, name string) string {
+	return fmt.Sprintf(`:do { %s remove [find name="%s"] } on-error={ :log debug "APB: no previous %s" }`,
+		path, name, name)
+}
+
+// writeScript emits the assembly of one script body and the command that
+// installs it.
+func writeScript(b *strings.Builder, p Params, name, desc, body string) {
+	fmt.Fprintf(b, "\n# --- %s: %s\n", name, desc)
+	b.WriteString(":set apbSrc \"\"\n")
+	for _, chunk := range chunkEscaped(escapeSource(body), maxChunk) {
+		fmt.Fprintf(b, ":set apbSrc ($apbSrc . \"%s\")\n", chunk)
+	}
+	fmt.Fprintf(b, "%s\n", removeLine("/system script", name))
+	fmt.Fprintf(b,
+		"/system script add name=\"%s\" policy=%s dont-require-permissions=no comment=\"APB: %s\" source=$apbSrc\n",
+		name, p.Policy, desc)
+}
+
+// chunkEscaped splits already-escaped script text into pieces that each fit on
+// one line, never splitting a two-character escape and preferring to end a
+// piece at a line break in the script so the generated file stays readable.
+func chunkEscaped(s string, max int) []string {
+	if max < 32 {
+		max = maxChunk
+	}
+	var out []string
+	for i := 0; i < len(s); {
+		j, col, lastBreak := i, 0, -1
+		for j < len(s) {
+			n := 1
+			if s[j] == '\\' && j+1 < len(s) {
+				n = 2
+			}
+			if col+n > max {
+				break
+			}
+			j += n
+			col += n
+			// A "\r\n" pair ends a line of the script: a natural break point.
+			if j >= 4 && s[j-4:j] == `\r\n` {
+				lastBreak = j
+			}
+		}
+		if j >= len(s) {
+			out = append(out, s[i:])
+			break
+		}
+		if lastBreak > i {
+			j = lastBreak
+		}
+		out = append(out, s[i:j])
+		i = j
+	}
+	return out
+}
+
 // escapeSource renders a script body as a RouterOS quoted string, using the
 // same escapes the router's own export produces.
 func escapeSource(s string) string {
@@ -284,31 +364,6 @@ func escapeSource(s string) string {
 		default:
 			b.WriteRune(r)
 		}
-	}
-	return b.String()
-}
-
-// wrapEscaped breaks a long escaped string across physical lines using the
-// RouterOS continuation convention: a trailing backslash, then indentation
-// that the parser discards. Breaks never land inside a two-character escape.
-func wrapEscaped(s string, width int) string {
-	if width < 16 {
-		width = 96
-	}
-	var b strings.Builder
-	col := 0
-	for i := 0; i < len(s); {
-		n := 1
-		if s[i] == '\\' && i+1 < len(s) {
-			n = 2
-		}
-		if col+n > width {
-			b.WriteString("\\\n    ")
-			col = 4
-		}
-		b.WriteString(s[i : i+n])
-		col += n
-		i += n
 	}
 	return b.String()
 }

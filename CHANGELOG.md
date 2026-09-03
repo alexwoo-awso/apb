@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.0.1 — 2026-09-03
+
+### Fixed
+
+- **Generated RouterOS bundles failed to import.** The generator used
+  MikroTik's own export format, which continues long lines with a trailing
+  backslash. That format is not safe to move between machines: the continuation
+  is a backslash followed by a newline, so a file that acquires CRLF line
+  endings in transit — a download on Windows, an editor, a copy-paste — puts a
+  carriage return after the backslash, the line stops continuing, the quoted
+  `source="` string is left open, and `/import` fails several lines later with
+  `expected end of command`. Reported on RouterOS 6.49.20.
+- **Generated scripts could be silently corrupted.** RouterOS strips leading
+  whitespace on a continuation line, so a line break placed immediately before a
+  space ate a space that belonged to the script. Eight such breaks were present
+  in a typical bundle, one of them turning `:local Hdr (...)` into
+  `:local Hdr(...)`, which would have failed at run time even if the import had
+  succeeded.
+
+Script bodies are now assembled one piece at a time into a variable and then
+installed, so every line of a generated file is a complete command and the file
+imports identically with LF or CRLF endings. Three tests lock this in: no
+generated line may end with a backslash, the bundle must survive CRLF
+conversion, and the assembled source must match the template byte for byte.
+
+Removals of previous installations now target each script and schedule by name
+rather than by regular expression, and no longer use an empty `on-error` block.
+
+**Regenerate and reinstall any bundle produced by 2.0.0.**
+
 ## 2.0.0 — 2026-09-02
 
 A complete rewrite. The original PHP and cron stack is replaced by a single Go

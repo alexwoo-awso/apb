@@ -58,6 +58,24 @@ Two other globals guard against overlapping runs: `apbLock` and `apbBootLock`
 hold the uptime at which a run started, and a lock older than a few minutes is
 assumed dead and taken over. A fifteen-second schedule must never stack up.
 
+## The shape of the generated file
+
+Every line in a generated bundle is a complete command. The script bodies are
+assembled into a variable one piece at a time and then installed, rather than
+embedded as the single backslash-continued string RouterOS itself exports.
+
+That matters because the export format is not safe to move between machines. A
+continuation is a backslash followed by a newline, so a file that acquires CRLF
+line endings on the way to the router — a download on Windows, an editor, a
+copy-paste — puts a carriage return after the backslash, the line stops
+continuing, the quoted string is left open, and `/import` fails with
+`expected end of command` several lines later. RouterOS also strips leading
+whitespace on a continuation line, so a break placed before a space silently
+removes a space the script needed.
+
+With no continuations neither can happen, and the file imports identically with
+either line ending.
+
 ## Detection: what you have to provide
 
 APB uploads whatever lands in the detection list (`APB_detect` by default). It
@@ -109,6 +127,14 @@ CRL checking is off by default because a router that cannot reach the CRL
 distribution point stops syncing, which trades a small risk for a large one.
 
 ## Troubleshooting
+
+**`/import` fails with `expected end of command`.**
+
+That is the signature of a bundle generated before this was fixed, or of a file
+whose line continuations were broken in transit. Regenerate the bundle from the
+console: current bundles contain no continuations and import the same with LF or
+CRLF endings. Check with `/file print detail where name~"apb"` that the file
+actually arrived whole.
 
 **Nothing appears in the console.**
 
