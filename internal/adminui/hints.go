@@ -107,6 +107,7 @@ var hints = map[string]Hint{
 			"Download apb-install.rsc, upload it to the router, then run /import file-name=apb-install.rsc",
 			"Delete the file from the router afterwards: it contains the token.",
 			"The firewall example is not installed for you. Read it before importing.",
+			"A quiet poll logs nothing. RouterOS 7 logs its own line per fetch; docs/routeros.md shows how to silence that.",
 		},
 	},
 	"activity": {

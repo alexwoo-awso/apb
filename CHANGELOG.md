@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.1.3 — 2026-09-04
+
+### Fixed
+
+- **A steady-state poll now logs nothing.** The cursor recovery notice was
+  emitted on every single run — four times a minute, for ever — because a
+  RouterOS global does not survive between scheduled runs and the address-list
+  marker is therefore always the source. It was a diagnostic added to find that
+  out, it did its job, and it is now at `debug`.
+
+The scripts speak only when something changes or fails: addresses applied, a
+rebuild finished, a report uploaded at `info`; a failed request or a rejected
+report at `warning`; a rebuild that gave up, or a router that received addresses
+and stored none, at `error`.
+
+A test now lists every message the sync script may log at `info` and fails on
+any other, so adding one is a deliberate decision rather than an accident.
+
+### Documented
+
+- RouterOS 7 logs `fetch,info Download from ... FINISHED` for every request,
+  which a script cannot suppress. `docs/routeros.md` now gives the logging rule
+  that silences it, with the caveat that it applies to every script on the
+  router.
+
 ## 2.1.2 — 2026-09-04
 
 ### Changed

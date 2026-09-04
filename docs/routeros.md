@@ -161,6 +161,40 @@ The token is a password, and it crosses the network on every call.
 CRL checking is off by default because a router that cannot reach the CRL
 distribution point stops syncing, which trades a small risk for a large one.
 
+## Keeping the log quiet
+
+A steady-state poll logs nothing. The scripts only speak when something actually
+changes or fails:
+
+| Level | When |
+|---|---|
+| info | addresses applied, a rebuild finished, a report uploaded, a reboot rebuild starting |
+| warning | a request failed, the cursor marker could not be written, a report was rejected |
+| error | a rebuild gave up, or the router received addresses and stored none |
+| debug | recovering the cursor from the marker, which happens on every run |
+
+The cursor recovery notice sits at debug deliberately: RouterOS globals do not
+survive between scheduled runs, so the marker is read every fifteen seconds, and
+a message about it four times a minute is noise. Enable the `debug` topic if you
+want to watch it.
+
+**RouterOS 7 logs its own message for every fetch**, which APB cannot suppress
+from a script:
+
+```
+fetch,info Download from apb.example.org FINISHED
+```
+
+That is one line every fifteen seconds and it is not coming from these scripts.
+To silence it, take `fetch` out of the default logging rule:
+
+```
+/system logging set [find topics~"info" and action="memory"] topics=info,!fetch
+```
+
+Check what you have first with `/system logging print`, and be aware this hides
+fetch messages from every script on the router, not only these.
+
 ## Troubleshooting
 
 **`/import` fails with `expected end of command`.**

@@ -616,3 +616,42 @@ func TestDefaultTimeoutIsThePerBranchMaximum(t *testing.T) {
 		}
 	}
 }
+
+// A router polls four times a minute for ever, so anything logged on a poll
+// where nothing changed is noise. The cursor recovery notice was exactly that:
+// it fires on every run, because the RouterOS global does not persist and the
+// marker is therefore always the source.
+//
+// Every message sync may log at info is listed here, and each is a real state
+// change that happens rarely. Adding one means deciding, deliberately, that an
+// operator wants to see it four times a minute.
+func TestASteadyStatePollLogsNothing(t *testing.T) {
+	allowed := []string{
+		"APB: no cursor held on this router, rebuilding the list", // after a reboot
+		"APB: cursor too old, falling back to a full rebuild",     // history pruned
+		"APB: applied +", // addresses changed
+	}
+	p := FromDevice(testDevice(), "https://apb.example.org", "APB", "apb_abcdefghijklmnop", "apb-router")
+	body, err := render("sync.rsc.tmpl", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, chunk := range strings.Split(body, ":log info")[1:] {
+		ok := false
+		for _, a := range allowed {
+			if strings.Contains(chunk[:min(len(chunk), 120)], a) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			t.Errorf("sync logs an unlisted message at info: %.90s", strings.TrimSpace(chunk))
+		}
+	}
+	if strings.Contains(body, `:log info ("APB: recovered cursor`) {
+		t.Error("the cursor recovery notice is still at info level")
+	}
+	if !strings.Contains(body, `:log debug ("APB: recovered cursor`) {
+		t.Error("the cursor recovery notice should still be available at debug level")
+	}
+}

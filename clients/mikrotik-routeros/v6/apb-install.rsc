@@ -1,5 +1,5 @@
 # APB scripts for "edge-1" (RouterOS v6)
-# Generated 2026-09-03 23:39:42Z by APB.
+# Generated 2026-09-04 00:53:47Z by APB.
 #
 # This file contains the API token for this router. Treat it as a password:
 # do not commit it, do not share it, and remove the file from the router once
@@ -24,7 +24,7 @@
 :set apbSrc ($apbSrc . ":global apbCursor\r\n:global apbLock\r\n:local Hdr (\"Authorization: Bearer \" . \$Token . \",User-Agent: \" . \$UA)\r\n:local Now [/system resource get uptime]\r\n")
 :set apbSrc ($apbSrc . ":local Run true\r\n:if ([:typeof \$apbLock] = \"time\") do={ :if ((\$Now - \$apbLock) < 3m) do={ :set Run false } }\r\n:if (\$Run) do={\r\n:set apbLock \$Now\r\n:do {\r\n")
 :set apbSrc ($apbSrc . ":if ([:typeof \$apbCursor] != \"num\") do={ :local Saved [/ip firewall address-list find list=\$State] ; :if ([:len \$Saved] > 0) do={ :do { :set apbCursor [:tonum [/ip f")
-:set apbSrc ($apbSrc . "irewall address-list get [:pick \$Saved 0] comment]] ; :log info (\"APB: recovered cursor \" . \$apbCursor . \" from \" . \$State) } on-error={} } }\r\n")
+:set apbSrc ($apbSrc . "irewall address-list get [:pick \$Saved 0] comment]] ; :log debug (\"APB: recovered cursor \" . \$apbCursor . \" from \" . \$State) } on-error={} } }\r\n")
 :set apbSrc ($apbSrc . ":if ([:typeof \$apbCursor] != \"num\") do={\r\n:log info \"APB: no cursor held on this router, rebuilding the list\"\r\n/system script run apb-bootstrap\r\n} else={\r\n")
 :set apbSrc ($apbSrc . ":local More true\r\n:local Loops 0\r\n:do {\r\n:set More false\r\n:set Loops (\$Loops + 1)\r\n:local Held [:len [/ip firewall address-list find list=\$List]]\r\n")
 :set apbSrc ($apbSrc . ":local Res \"\"\r\n")
